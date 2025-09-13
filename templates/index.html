@@ -233,17 +233,7 @@
       layer.draw();
     });
 
-    // Gruppieren / Lösen / Löschen
-    document.getElementById('groupBtn').addEventListener('click',()=>{/* ... bleibt gleich ... */});
-    document.getElementById('ungroupBtn').addEventListener('click',()=>{/* ... bleibt gleich ... */});
-    document.getElementById('deleteKitchenBtn').addEventListener('click',()=>{/* ... bleibt gleich ... */});
-
-    // Raster
-    let gridOn=false;
-    document.getElementById('toggleGridBtn').addEventListener('click',(e)=>{/* ... bleibt gleich ... */});
-
-    // Download
-    document.getElementById('downloadBtn').addEventListener('click',()=>{/* ... bleibt gleich ... */});
+    // Raster / Download / Gruppieren – kannst du nach Bedarf füllen
 
     // Eigene Küche hochladen + freistellen
     document.getElementById("kitchenUpload").addEventListener("change", async (e) => {
@@ -259,8 +249,12 @@
       });
 
       const data = await res.json();
+      console.log("Antwort vom Server:", data);
+
       if (data.url) {
         addKitchen(data.url);
+      } else if (data.base64) {
+        addKitchen("data:image/png;base64," + data.base64);
       } else {
         alert("Fehler beim Freistellen der Küche.");
       }

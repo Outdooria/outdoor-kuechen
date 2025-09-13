@@ -15,22 +15,26 @@ def index():
 def upload_kitchen():
     file = request.files["image"]
 
-    # Das rembg-Modell von Replicate aufrufen
-    # Wichtig: REPLICATE_API_TOKEN muss in Render unter Environment Variables gesetzt sein!
+    # Aufruf des rembg-Modells von Replicate
     output = replicate.run(
         "cjwbw/rembg:1.4.1",
         input={"image": file}
     )
 
-    # Replicate liefert in der Regel eine URL zurück
+    # Debug-Ausgabe im Render-Log
+    print("Replicate-Ausgabe:", output)
+
+    # Verschiedene Rückgabe-Formate von Replicate abfangen
     if isinstance(output, list) and len(output) > 0:
         return jsonify({"url": output[0]})
     elif isinstance(output, str):
-        return jsonify({"url": output})
+        if output.startswith("http"):
+            return jsonify({"url": output})
+        else:
+            return jsonify({"base64": output})
     else:
         return jsonify({"error": "Fehler beim Freistellen"}), 500
 
 
 if __name__ == "__main__":
-    # Lokaler Start, auf Render läuft gunicorn (siehe Procfile)
     app.run(host="0.0.0.0", port=5000, debug=True)
