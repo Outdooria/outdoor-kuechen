@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
   <meta charset="utf-8">
-  <title>Outdoor-Küche Vorschau (Gruppen-Resize)</title>
+  <title>Outdoor-Küche Vorschau (Hybrid: Verzerren & Gruppieren)</title>
   <style>
     body { font-family: sans-serif; text-align: center; padding: 20px; margin: 0; }
     #konva-container { border: 1px solid #ccc; margin: 20px auto; display: inline-block; max-width: 90%; }
@@ -12,7 +12,7 @@
     .card button { margin-top: 6px; }
     #controls { margin: 15px 0; display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
     button, select { padding: 10px 14px; border: none; border-radius: 6px; background: #0077cc; color: #fff; cursor: pointer; }
-    #kitchenSelect { background: #555; }
+    #kitchenSelect { background: #555; min-width: 180px; }
     #groupBtn { background:#6f42c1; }
     #ungroupBtn { background:#20c997; }
     #deleteKitchenBtn { background:#dc3545; }
@@ -20,7 +20,7 @@
   </style>
 </head>
 <body>
-  <h2>Outdoor-Küche Vorschau (Gruppen-Resize)</h2>
+  <h2>Outdoor-Küche Vorschau (Hybrid: Verzerren & Gruppieren)</h2>
 
   <form id="uploadForm" enctype="multipart/form-data">
     <p>Terrassenfoto hochladen:</p>
@@ -33,9 +33,7 @@
   <div class="gallery" id="gallery"></div>
 
   <div id="controls">
-    <select id="kitchenSelect" multiple size="3" style="min-width:180px;">
-      <!-- Multi-Select -->
-    </select>
+    <select id="kitchenSelect" multiple size="3"></select>
     <button type="button" id="toggleGridBtn">Raster anzeigen</button>
     <button type="button" id="groupBtn">Gruppieren</button>
     <button type="button" id="ungroupBtn">Gruppe lösen</button>
@@ -51,7 +49,7 @@
     let stage, layer, terrasseImg;
     let kitchens = [];   // Einzelne Küchen
     let groups = [];     // Gruppen
-    let transformer;     // Für Resize/Rotate
+    let transformer;     // Für Gruppen
 
     function initStage(width, height) {
       document.getElementById("konva-container").innerHTML = "";
@@ -62,14 +60,7 @@
       transformer = new Konva.Transformer({
         rotateEnabled: true,
         enabledAnchors: ["top-left", "top-right", "bottom-left", "bottom-right"],
-        ignoreStroke: true,
-        boundBoxFunc: (oldBox, newBox) => {
-          // Mindestgröße
-          if (newBox.width < 50 || newBox.height < 50) {
-            return oldBox;
-          }
-          return newBox;
-        }
+        ignoreStroke: true
       });
       layer.add(transformer);
 
@@ -121,22 +112,44 @@
     function addKitchen(src) {
       const img = new Image();
       img.onload = () => {
-        const w = 200, h = (img.height/img.width)*200;
+        const w = 250, h = (img.height/img.width)*250;
+
+        const baseCanvas = document.createElement("canvas");
+        baseCanvas.width = img.width;
+        baseCanvas.height = img.height;
+        baseCanvas.getContext("2d").drawImage(img, 0, 0);
+
+        const previewCanvas = document.createElement("canvas");
+        previewCanvas.width = w;
+        previewCanvas.height = h;
 
         const konvaImage = new Konva.Image({
-          image: img,
-          x: 100,
-          y: 100,
-          width: w,
-          height: h,
+          image: previewCanvas,
+          x: 100, y: 100,
           draggable: true
         });
-
         layer.add(konvaImage);
+
+        // 4 Eckpunkte für Verzerrung
+        const handles = [
+          new Konva.Circle({ x: 100, y: 100, radius: 6, fill: "red", draggable: true }),
+          new Konva.Circle({ x: 100+w, y: 100, radius: 6, fill: "red", draggable: true }),
+          new Konva.Circle({ x: 100+w, y: 100+h, radius: 6, fill: "red", draggable: true }),
+          new Konva.Circle({ x: 100, y: 100+h, radius: 6, fill: "red", draggable: true })
+        ];
+        handles.forEach(hdl => {
+          hdl.on("dragmove", () => {
+            warpImage(baseCanvas, previewCanvas, handles);
+            konvaImage.getLayer().batchDraw();
+          });
+          layer.add(hdl);
+        });
+
+        warpImage(baseCanvas, previewCanvas, handles);
         layer.draw();
 
         const id = "Küche " + (kitchens.length+1);
-        kitchens.push({ id, konvaImage, group: null });
+        kitchens.push({ id, baseCanvas, previewCanvas, konvaImage, handles, group: null });
         updateDropdown();
       };
       img.src = src;
@@ -165,15 +178,14 @@
         const k = kitchens[i];
         if (!k.group) {
           group.add(k.konvaImage);
+          k.handles.forEach(h => h.hide()); // Handles ausblenden
           k.group = group;
         }
       });
       layer.add(group);
       groups.push(group);
 
-      // Transformer für die neue Gruppe
-      transformer.nodes([group]);
-
+      transformer.nodes([group]); // Transformer aktivieren
       layer.draw();
       updateDropdown();
     });
@@ -184,7 +196,10 @@
         g.getChildren().forEach(child => {
           layer.add(child);
           const k = kitchens.find(k => k.konvaImage === child);
-          if (k) k.group = null;
+          if (k) {
+            k.group = null;
+            k.handles.forEach(h => h.show()); // Handles zurück
+          }
         });
         g.destroy();
       });
@@ -202,12 +217,51 @@
       selected.forEach(i => {
         const k = kitchens[i];
         k.konvaImage.destroy();
+        k.handles.forEach(h => h.destroy());
         kitchens.splice(i,1);
       });
       transformer.nodes([]);
       layer.draw();
       updateDropdown();
     });
+
+    // Verzerrung per Dreiecke
+    function warpImage(srcCanvas, dstCanvas, handles) {
+      const ctx = dstCanvas.getContext("2d");
+      ctx.clearRect(0, 0, dstCanvas.width, dstCanvas.height);
+
+      const w = srcCanvas.width, h = srcCanvas.height;
+      const srcPts = [[0,0],[w,0],[w,h],[0,h]];
+      const dstPts = handles.map(h => [h.x(), h.y()]);
+
+      function drawTriangle(s0,s1,s2,d0,d1,d2) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(d0[0],d0[1]);
+        ctx.lineTo(d1[0],d1[1]);
+        ctx.lineTo(d2[0],d2[1]);
+        ctx.closePath();
+        ctx.clip();
+
+        const denom = (s0[0]*(s1[1]-s2[1])+s1[0]*(s2[1]-s0[1])+s2[0]*(s0[1]-s1[1]));
+        if (denom === 0) { ctx.restore(); return; }
+
+        ctx.transform(
+          (d0[0]*(s1[1]-s2[1])+d1[0]*(s2[1]-s0[1])+d2[0]*(s0[1]-s1[1]))/denom,
+          (d0[1]*(s1[1]-s2[1])+d1[1]*(s2[1]-s0[1])+d2[1]*(s0[1]-s1[1]))/denom,
+          (d0[0]*(s2[0]-s1[0])+d1[0]*(s0[0]-s2[0])+d2[0]*(s1[0]-s0[0]))/denom,
+          (d0[1]*(s2[0]-s1[0])+d1[1]*(s0[0]-s2[0])+d2[1]*(s1[0]-s0[0]))/denom,
+          (d0[0]*(s1[0]*s2[1]-s2[0]*s1[1])+d1[0]*(s2[0]*s0[1]-s0[0]*s2[1])+d2[0]*(s0[0]*s1[1]-s1[0]*s0[1]))/denom,
+          (d0[1]*(s1[0]*s2[1]-s2[0]*s1[1])+d1[1]*(s2[0]*s0[1]-s0[0]*s2[1])+d2[1]*(s0[0]*s1[1]-s1[0]*s0[1]))/denom
+        );
+
+        ctx.drawImage(srcCanvas,0,0);
+        ctx.restore();
+      }
+
+      drawTriangle(srcPts[0],srcPts[1],srcPts[2],dstPts[0],dstPts[1],dstPts[2]);
+      drawTriangle(srcPts[0],srcPts[2],srcPts[3],dstPts[0],dstPts[2],dstPts[3]);
+    }
 
     // Raster
     let gridOn = false;
@@ -241,3 +295,4 @@
   </script>
 </body>
 </html>
+
