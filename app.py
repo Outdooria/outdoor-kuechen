@@ -17,8 +17,11 @@ if not REPLICATE_TOKEN:
     raise RuntimeError("Bitte REPLICATE_API_TOKEN als Umgebungsvariable setzen.")
 
 replicate_client = replicate.Client(api_token=REPLICATE_TOKEN)
+
+# Rembg Modell + feste Version-ID
 MODEL = replicate_client.models.get("cjwbw/rembg")
-VERSION = MODEL.versions[0]
+VERSION = MODEL.versions.get("fb8af171cfa1616ddcf1242c093f9c46bcada5ad4cf6f2fbe8b81b330ec5c003")
+
 
 def allowed_file(filename):
     return "." in filename and filename.rsplit(".",1)[1].lower() in ALLOWED_EXT
