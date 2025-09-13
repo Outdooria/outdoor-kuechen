@@ -1,0 +1,17 @@
+[
+  {
+    "name": "Cube 300 Edelstahl",
+    "description": "Kompakte Outdoor-Küche mit Spüle und Grill.",
+    "image": "/static/kitchens/k1.png"
+  },
+  {
+    "name": "Urban Line Black",
+    "description": "Moderne Küche in Anthrazit mit viel Stauraum.",
+    "image": "/static/kitchens/k2.png"
+  },
+  {
+    "name": "Freestyle Modular",
+    "description": "Flexible Module für Terrasse & Garten.",
+    "image": "/static/kitchens/k3.png"
+  }
+]

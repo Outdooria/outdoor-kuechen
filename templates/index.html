@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Outdoor-Küche Vorschau</title>
+<style>
+  body{font-family:sans-serif;text-align:center;padding:20px}
+  #container{position:relative;display:inline-block;border:1px solid #ccc}
+  #terrasse{max-width:800px;display:block}
+  #kueche{position:absolute;top:50px;left:50px;width:300px;cursor:move;display:none}
+  .gallery{display:flex;gap:16px;justify-content:center;margin:20px 0;flex-wrap:wrap}
+  .card{width:200px;padding:12px;border-radius:10px;border:1px solid #ddd;text-align:center}
+  .card.selected{border:2px solid #0077cc;box-shadow:0 0 10px rgba(0,119,204,0.2)}
+  .card img{width:100%;height:auto}
+  button{padding:8px 12px;border:none;border-radius:6px;background:#0077cc;color:#fff;cursor:pointer}
+  button.small{padding:6px 10px;font-size:14px}
+</style>
+</head>
+<body>
+  <h2>Outdoor-Küche Vorschau</h2>
+  <form id="uploadForm" enctype="multipart/form-data">
+    <p>Terrassenfoto hochladen:</p>
+    <input type="file" name="terrasse" accept="image/*" required><br><br>
+    <p>Eigene Küche hochladen (optional):</p>
+    <input type="file" name="kueche" accept="image/*"><br><br>
+    <button type="submit" class="small">Fotos verarbeiten</button>
+  </form>
+  <div class="gallery" id="gallery"></div>
+  <div id="container">
+    <img id="terrasse" alt="Terrasse">
+    <img id="kueche" alt="Küche">
+  </div>
+  <br><br>
+  <button id="downloadBtn" style="display:none">Bild speichern</button>
+<script>
+// JS Code hier analog zum letzten Schritt (gekürzt für Übersicht)
+</script>
+</body>
+</html>
