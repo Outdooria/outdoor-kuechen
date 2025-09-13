@@ -198,10 +198,14 @@
       kitchens.forEach((k,i)=>{const opt=document.createElement('option');opt.value=i;opt.textContent=k.id+(k.group?' (Gruppe)':'');sel.appendChild(opt);});
     }
 
-    // Skaliermodus
+    // Skaliermodus (Debug-fest)
     document.getElementById('scaleModeBtn').addEventListener('click', () => {
       const sel = document.getElementById('kitchenSelect');
-      if (!sel.selectedOptions.length) return;
+      if (!sel.selectedOptions.length) {
+        alert("Bitte zuerst eine Küche auswählen.");
+        return;
+      }
+
       const idx = parseInt(sel.selectedOptions[0].value);
       const k = kitchens[idx];
 
@@ -209,12 +213,17 @@
         transformer.nodes([]);
         k.handles.forEach(h => h.show());
         scaleMode = null;
+        console.log("Skaliermodus AUS für", k.id);
       } else {
         kitchens.forEach(kk => kk.handles.forEach(h => h.show()));
         transformer.nodes([]);
+
         k.handles.forEach(h => h.hide());
         transformer.nodes([k.imageNode]);
+        transformer.moveToTop();
         scaleMode = k;
+
+        console.log("Skaliermodus AN für", k.id);
       }
       layer.draw();
     });
