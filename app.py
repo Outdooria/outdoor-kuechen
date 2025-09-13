@@ -17,7 +17,7 @@ def upload_kitchen():
 
         # Hintergrund entfernen mit bria/remove-background
         output = replicate.run(
-            "bria/remove-background:56c1fc5601836576320e3849bdbf6f8b40d2150f8ffad18c107d177f4d8e5a3f",
+            "bria/remove-background:k2n7712895rm80cr1zxb6bkm20",
             input={"image": image_stream}
         )
 
