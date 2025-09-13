@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
   <meta charset="utf-8">
-  <title>Outdoor-Küche Vorschau (Hybrid: Sichtbar + Verzerren + Gruppieren)</title>
+  <title>Outdoor-Küche Vorschau (Konva.Shape Verzerrung)</title>
   <style>
     body { font-family: sans-serif; text-align: center; padding: 20px; margin: 0; }
     #konva-container { border: 1px solid #ccc; margin: 20px auto; display: inline-block; max-width: 90%; }
@@ -20,7 +20,7 @@
   </style>
 </head>
 <body>
-  <h2>Outdoor-Küche Vorschau (Hybrid: Sichtbar + Verzerren + Gruppieren)</h2>
+  <h2>Outdoor-Küche Vorschau (Konva.Shape Verzerrung)</h2>
 
   <form id="uploadForm" enctype="multipart/form-data">
     <p>Terrassenfoto hochladen:</p>
@@ -108,58 +108,57 @@
         });
       });
 
-    // Küche hinzufügen
+    // Küche hinzufügen mit Shape
     function addKitchen(src) {
       const img = new Image();
       img.onload = () => {
         const w = 250, h = (img.height/img.width)*250;
+        const startX = 100, startY = 100;
 
-        const baseCanvas = document.createElement("canvas");
-        baseCanvas.width = img.width;
-        baseCanvas.height = img.height;
-        baseCanvas.getContext("2d").drawImage(img, 0, 0);
-
-        const previewCanvas = document.createElement("canvas");
-        previewCanvas.width = w;
-        previewCanvas.height = h;
-
-        // �� Erstes Bild reinzeichnen (normal skaliert)
-        const ctx = previewCanvas.getContext("2d");
-        ctx.drawImage(baseCanvas, 0, 0, baseCanvas.width, baseCanvas.height, 0, 0, w, h);
-
-        const konvaImage = new Konva.Image({
-          image: previewCanvas,
-          x: 100, y: 100,
-          width: w, height: h,
-          draggable: true
-        });
-        layer.add(konvaImage);
-
-        // 4 Eckpunkte für Verzerrung
+        // 4 Eckpunkte
         const handles = [
-          new Konva.Circle({ x: 100, y: 100, radius: 6, fill: "red", draggable: true }),
-          new Konva.Circle({ x: 100+w, y: 100, radius: 6, fill: "red", draggable: true }),
-          new Konva.Circle({ x: 100+w, y: 100+h, radius: 6, fill: "red", draggable: true }),
-          new Konva.Circle({ x: 100, y: 100+h, radius: 6, fill: "red", draggable: true })
+          new Konva.Circle({ x: startX,   y: startY,   radius: 6, fill: "red", draggable: true }),
+          new Konva.Circle({ x: startX+w, y: startY,   radius: 6, fill: "red", draggable: true }),
+          new Konva.Circle({ x: startX+w, y: startY+h, radius: 6, fill: "red", draggable: true }),
+          new Konva.Circle({ x: startX,   y: startY+h, radius: 6, fill: "red", draggable: true })
         ];
-        handles.forEach(hdl => {
-          hdl.on("dragmove", () => {
-            warpImage(baseCanvas, previewCanvas, handles, w, h);
-            konvaImage.getLayer().batchDraw();
-          });
-          layer.add(hdl);
+
+        // Shape
+        const kitchenShape = new Konva.Shape({
+          sceneFunc: function(ctx, shape) {
+            ctx.save();
+            ctx.beginPath();
+            ctx.moveTo(handles[0].x(), handles[0].y());
+            ctx.lineTo(handles[1].x(), handles[1].y());
+            ctx.lineTo(handles[2].x(), handles[2].y());
+            ctx.lineTo(handles[3].x(), handles[3].y());
+            ctx.closePath();
+            ctx.clip();
+
+            // Bild einfach in Startrechteck zeichnen
+            ctx.drawImage(img, startX, startY, w, h);
+            ctx.restore();
+          }
         });
+
+        layer.add(kitchenShape);
+        handles.forEach(h => layer.add(h));
+
+        // Handles -> redraw
+        handles.forEach(h => h.on("dragmove", () => {
+          kitchenShape.getLayer().batchDraw();
+        }));
 
         layer.draw();
 
         const id = "Küche " + (kitchens.length+1);
-        kitchens.push({ id, baseCanvas, previewCanvas, konvaImage, handles, group: null });
+        kitchens.push({ id, shape: kitchenShape, handles, group: null });
         updateDropdown();
       };
       img.src = src;
     }
 
-    // Dropdown
+    // Dropdown aktualisieren
     function updateDropdown() {
       const select = document.getElementById("kitchenSelect");
       select.innerHTML = "";
@@ -181,7 +180,7 @@
       selected.forEach(i => {
         const k = kitchens[i];
         if (!k.group) {
-          group.add(k.konvaImage);
+          group.add(k.shape);
           k.handles.forEach(h => h.hide());
           k.group = group;
         }
@@ -199,7 +198,7 @@
       groups.forEach(g => {
         g.getChildren().forEach(child => {
           layer.add(child);
-          const k = kitchens.find(k => k.konvaImage === child);
+          const k = kitchens.find(k => k.shape === child);
           if (k) {
             k.group = null;
             k.handles.forEach(h => h.show());
@@ -220,7 +219,7 @@
       selected.sort((a,b)=>b-a);
       selected.forEach(i => {
         const k = kitchens[i];
-        k.konvaImage.destroy();
+        k.shape.destroy();
         k.handles.forEach(h => h.destroy());
         kitchens.splice(i,1);
       });
@@ -228,30 +227,6 @@
       layer.draw();
       updateDropdown();
     });
-
-    // Verzerrung
-    function warpImage(srcCanvas, dstCanvas, handles, w, h) {
-      const ctx = dstCanvas.getContext("2d");
-      ctx.clearRect(0, 0, w, h);
-
-      const srcPts = [[0,0],[srcCanvas.width,0],[srcCanvas.width,srcCanvas.height],[0,srcCanvas.height]];
-      const dstPts = handles.map(h => [h.x()-handles[0].x(), h.y()-handles[0].y()]);
-
-      function drawTriangle(s0,s1,s2,d0,d1,d2) {
-        ctx.save();
-        ctx.beginPath();
-        ctx.moveTo(d0[0],d0[1]);
-        ctx.lineTo(d1[0],d1[1]);
-        ctx.lineTo(d2[0],d2[1]);
-        ctx.closePath();
-        ctx.clip();
-        ctx.drawImage(srcCanvas,0,0,w,h);
-        ctx.restore();
-      }
-
-      drawTriangle(srcPts[0],srcPts[1],srcPts[2],dstPts[0],dstPts[1],dstPts[2]);
-      drawTriangle(srcPts[0],srcPts[2],srcPts[3],dstPts[0],dstPts[2],dstPts[3]);
-    }
 
     // Raster
     let gridOn = false;
