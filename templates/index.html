@@ -103,28 +103,6 @@
     <div id="listItems"></div>
   </div>
 
-  <!-- Projektverwaltung -->
-  <div id="projects">
-    <h3>Projekte</h3>
-    <input type="text" id="projectName" placeholder="Projektname eingeben">
-    <button type="button" id="saveProjectBtn">Projekt speichern</button>
-    <button type="button" id="exportProjectsBtn">Projekte exportieren</button>
-    <input type="file" id="importProjectsInput" accept="application/json" style="display:none">
-    <button type="button" id="importProjectsBtn">Projekte importieren</button>
-
-    <label>
-      <input type="radio" name="importMode" value="merge" checked> Ergänzen
-    </label>
-    <label>
-      <input type="radio" name="importMode" value="replace"> Ersetzen
-    </label>
-
-    <ul id="projectList"></ul>
-    <button type="button" id="clearProjectsBtn" style="background:#dc3545;margin-top:10px">
-      Alle Projekte löschen
-    </button>
-  </div>
-
   <br>
   <button id="downloadBtn" style="display:none">Bild speichern</button>
 
@@ -222,7 +200,7 @@
       });
     }
 
-    // Drag/Touch Steuerung
+    // Hilfsfunktion Touch/Maus
     function getClientPos(e) {
       if (e.touches && e.touches.length > 0) {
         return { x: e.touches[0].clientX, y: e.touches[0].clientY };
@@ -231,12 +209,15 @@
       }
     }
 
+    // Drag/Resize/Rotate
     function makeInteractive(wrapper,img,resize,rotate) {
       wrapper.addEventListener("mousedown",()=>setActiveKitchen(wrapper));
       wrapper.addEventListener("touchstart",()=>setActiveKitchen(wrapper));
 
-      let dragging=false, offsetX=0, offsetY=0;
+      let dragging=false, resizing=false, rotating=false;
+      let offsetX=0, offsetY=0, startX=0, startY=0, startWidth=0, startHeight=0, startAngle=0;
 
+      // Drag
       img.addEventListener("mousedown", e=>{ dragging=true; offsetX=e.offsetX; offsetY=e.offsetY; });
       img.addEventListener("touchstart", e=>{
         const pos=getClientPos(e);
@@ -246,27 +227,82 @@
         e.preventDefault();
       });
 
+      // Resize
+      resize.addEventListener("mousedown", e=>{
+        e.stopPropagation();
+        resizing=true;
+        startX=e.clientX; startY=e.clientY;
+        startWidth=img.offsetWidth; startHeight=img.offsetHeight;
+      });
+      resize.addEventListener("touchstart", e=>{
+        e.stopPropagation();
+        const pos=getClientPos(e);
+        resizing=true;
+        startX=pos.x; startY=pos.y;
+        startWidth=img.offsetWidth; startHeight=img.offsetHeight;
+        e.preventDefault();
+      });
+
+      // Rotate
+      rotate.addEventListener("mousedown", e=>{
+        e.stopPropagation();
+        rotating=true;
+        startX=e.clientX; startY=e.clientY;
+        const rect=wrapper.getBoundingClientRect();
+        startAngle=Math.atan2(startY-rect.top-rect.height/2,startX-rect.left-rect.width/2)-parseFloat(wrapper.dataset.rotation||"0");
+      });
+      rotate.addEventListener("touchstart", e=>{
+        e.stopPropagation();
+        const pos=getClientPos(e);
+        rotating=true;
+        startX=pos.x; startY=pos.y;
+        const rect=wrapper.getBoundingClientRect();
+        startAngle=Math.atan2(startY-rect.top-rect.height/2,startX-rect.left-rect.width/2)-parseFloat(wrapper.dataset.rotation||"0");
+        e.preventDefault();
+      });
+
+      // Global Move
       document.addEventListener("mousemove", e=>{
         if(dragging){
           const rect=container.getBoundingClientRect();
-          let newLeft=e.clientX-rect.left-offsetX;
-          let newTop=e.clientY-rect.top-offsetY;
-          wrapper.style.left=newLeft+"px"; wrapper.style.top=newTop+"px";
+          wrapper.style.left=(e.clientX-rect.left-offsetX)+"px";
+          wrapper.style.top=(e.clientY-rect.top-offsetY)+"px";
+        }
+        if(resizing){
+          let dx=e.clientX-startX;
+          img.style.width=(startWidth+dx)+"px";
+          img.style.height="auto";
+        }
+        if(rotating){
+          const rect=wrapper.getBoundingClientRect();
+          const angle=Math.atan2(e.clientY-rect.top-rect.height/2,e.clientX-rect.left-rect.width/2)-startAngle;
+          wrapper.dataset.rotation=angle;
+          wrapper.style.transform=`rotate(${angle}rad)`;
         }
       });
 
       document.addEventListener("touchmove", e=>{
+        const pos=getClientPos(e);
         if(dragging){
-          const pos=getClientPos(e);
           const rect=container.getBoundingClientRect();
-          let newLeft=pos.x-rect.left-offsetX;
-          let newTop=pos.y-rect.top-offsetY;
-          wrapper.style.left=newLeft+"px"; wrapper.style.top=newTop+"px";
+          wrapper.style.left=(pos.x-rect.left-offsetX)+"px";
+          wrapper.style.top=(pos.y-rect.top-offsetY)+"px";
+        }
+        if(resizing){
+          let dx=pos.x-startX;
+          img.style.width=(startWidth+dx)+"px";
+          img.style.height="auto";
+        }
+        if(rotating){
+          const rect=wrapper.getBoundingClientRect();
+          const angle=Math.atan2(pos.y-rect.top-rect.height/2,pos.x-rect.left-rect.width/2)-startAngle;
+          wrapper.dataset.rotation=angle;
+          wrapper.style.transform=`rotate(${angle}rad)`;
         }
       });
 
-      document.addEventListener("mouseup", ()=>{ dragging=false; });
-      document.addEventListener("touchend", ()=>{ dragging=false; });
+      document.addEventListener("mouseup", ()=>{ dragging=resizing=rotating=false; });
+      document.addEventListener("touchend", ()=>{ dragging=resizing=rotating=false; });
     }
   </script>
 </body>
