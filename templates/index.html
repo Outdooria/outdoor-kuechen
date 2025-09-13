@@ -75,7 +75,7 @@
 
   <form id="uploadForm" enctype="multipart/form-data">
     <p>Terrassenfoto hochladen:</p>
-    <input type="file" name="terrasse" accept="image/*" required><br><br>
+    <input type="file" name="terrasse" accept="image/*,.heic,.heif" required><br><br>
     <p>Eigene Küche hochladen (optional):</p>
     <input type="file" name="kueche" accept="image/*"><br><br>
     <button type="submit" class="small">Fotos verarbeiten (nur für eigene Küche)</button>
@@ -136,92 +136,37 @@
     const gallery = document.getElementById("gallery");
     const downloadBtn = document.getElementById("downloadBtn");
     const listItems = document.getElementById("listItems");
+    const uploadForm = document.getElementById("uploadForm");
+    const terrasseInput = document.querySelector('input[name="terrasse"]');
+    const kuecheInput   = document.querySelector('input[name="kueche"]');
 
     let activeKitchen = null;
     let kitchenCounter = 0;
-    const GRID_SIZE = 20;
 
-    function getClientPos(e) {
-      if (e.touches && e.touches.length > 0) {
-        return { x: e.touches[0].clientX, y: e.touches[0].clientY };
-      } else {
-        return { x: e.clientX, y: e.clientY };
-      }
-    }
+    // Terrassenfoto anzeigen
+    terrasseInput.addEventListener("change", (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        terrasse.src = ev.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
 
-    function addKitchen(src, name = "Küche") {
-      kitchenCounter++;
-      const wrapper = document.createElement("div");
-      wrapper.className = "kueche-wrapper";
-      wrapper.style.left = "100px"; wrapper.style.top = "100px";
-      wrapper.dataset.rotation = 0; wrapper.dataset.name = name + " " + kitchenCounter;
+    // Eigene Küche hinzufügen
+    uploadForm.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const file = kuecheInput.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        addKitchen(ev.target.result, "Eigene Küche");
+      };
+      reader.readAsDataURL(file);
+    });
 
-      const img = document.createElement("img"); img.src = src; img.className = "kueche";
-      const resize = document.createElement("div"); resize.className = "handle resizeHandle";
-      const rotate = document.createElement("div"); rotate.className = "handle rotateHandle";
-
-      wrapper.appendChild(img); wrapper.appendChild(resize); wrapper.appendChild(rotate);
-      container.appendChild(wrapper);
-      setActiveKitchen(wrapper);
-      makeInteractive(wrapper, img, resize, rotate);
-      updateList();
-      downloadBtn.style.display = "inline-block";
-    }
-
-    function setActiveKitchen(wrapper) {
-      document.querySelectorAll(".kueche-wrapper").forEach(w => w.classList.remove("active"));
-      wrapper.classList.add("active");
-      activeKitchen = wrapper;
-      updateList();
-    }
-
-    function updateList() {
-      listItems.innerHTML = "";
-      document.querySelectorAll(".kueche-wrapper").forEach(wrapper => {
-        const div = document.createElement("div");
-        div.className = "list-item";
-        if (wrapper.classList.contains("active")) div.classList.add("active");
-        div.textContent = wrapper.dataset.name;
-        listItems.appendChild(div);
-      });
-    }
-
-    function makeInteractive(wrapper, img, resize, rotate) {
-      wrapper.addEventListener("mousedown", () => setActiveKitchen(wrapper));
-      wrapper.addEventListener("touchstart", () => setActiveKitchen(wrapper));
-
-      let dragging=false, offsetX=0, offsetY=0;
-
-      img.addEventListener("mousedown", e => { dragging=true; offsetX=e.offsetX; offsetY=e.offsetY; });
-      img.addEventListener("touchstart", e => { 
-        const pos=getClientPos(e); 
-        dragging=true; 
-        offsetX=pos.x-wrapper.getBoundingClientRect().left; 
-        offsetY=pos.y-wrapper.getBoundingClientRect().top; 
-        e.preventDefault(); 
-      });
-
-      document.addEventListener("mousemove", e => {
-        if (dragging) {
-          const rect=container.getBoundingClientRect();
-          let newLeft=e.clientX-rect.left-offsetX;
-          let newTop=e.clientY-rect.top-offsetY;
-          wrapper.style.left=newLeft+"px"; wrapper.style.top=newTop+"px";
-        }
-      });
-      document.addEventListener("touchmove", e => {
-        if (dragging) {
-          const pos=getClientPos(e);
-          const rect=container.getBoundingClientRect();
-          let newLeft=pos.x-rect.left-offsetX;
-          let newTop=pos.y-rect.top-offsetY;
-          wrapper.style.left=newLeft+"px"; wrapper.style.top=newTop+"px";
-        }
-      });
-      document.addEventListener("mouseup", ()=>{ dragging=false; });
-      document.addEventListener("touchend", ()=>{ dragging=false; });
-    }
-
+    // Galerie laden
     fetch(window.location.origin + "/static/kitchens.json")
       .then(res => res.json())
       .then(data => {
@@ -238,6 +183,91 @@
           gallery.appendChild(card);
         });
       });
+
+    // Küche hinzufügen
+    function addKitchen(src, name="Küche") {
+      kitchenCounter++;
+      const wrapper=document.createElement("div");
+      wrapper.className="kueche-wrapper";
+      wrapper.style.left="100px"; wrapper.style.top="100px";
+      wrapper.dataset.rotation=0; wrapper.dataset.name=name+" "+kitchenCounter;
+
+      const img=document.createElement("img"); img.src=src; img.className="kueche";
+      const resize=document.createElement("div"); resize.className="handle resizeHandle";
+      const rotate=document.createElement("div"); rotate.className="handle rotateHandle";
+
+      wrapper.appendChild(img); wrapper.appendChild(resize); wrapper.appendChild(rotate);
+      container.appendChild(wrapper);
+      setActiveKitchen(wrapper);
+      makeInteractive(wrapper,img,resize,rotate);
+      updateList();
+      downloadBtn.style.display="inline-block";
+    }
+
+    function setActiveKitchen(wrapper) {
+      document.querySelectorAll(".kueche-wrapper").forEach(w=>w.classList.remove("active"));
+      wrapper.classList.add("active");
+      activeKitchen=wrapper;
+      updateList();
+    }
+
+    function updateList() {
+      listItems.innerHTML="";
+      document.querySelectorAll(".kueche-wrapper").forEach(wrapper=>{
+        const div=document.createElement("div");
+        div.className="list-item";
+        if(wrapper.classList.contains("active")) div.classList.add("active");
+        div.textContent=wrapper.dataset.name;
+        listItems.appendChild(div);
+      });
+    }
+
+    // Drag/Touch Steuerung
+    function getClientPos(e) {
+      if (e.touches && e.touches.length > 0) {
+        return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      } else {
+        return { x: e.clientX, y: e.clientY };
+      }
+    }
+
+    function makeInteractive(wrapper,img,resize,rotate) {
+      wrapper.addEventListener("mousedown",()=>setActiveKitchen(wrapper));
+      wrapper.addEventListener("touchstart",()=>setActiveKitchen(wrapper));
+
+      let dragging=false, offsetX=0, offsetY=0;
+
+      img.addEventListener("mousedown", e=>{ dragging=true; offsetX=e.offsetX; offsetY=e.offsetY; });
+      img.addEventListener("touchstart", e=>{
+        const pos=getClientPos(e);
+        dragging=true;
+        offsetX=pos.x-wrapper.getBoundingClientRect().left;
+        offsetY=pos.y-wrapper.getBoundingClientRect().top;
+        e.preventDefault();
+      });
+
+      document.addEventListener("mousemove", e=>{
+        if(dragging){
+          const rect=container.getBoundingClientRect();
+          let newLeft=e.clientX-rect.left-offsetX;
+          let newTop=e.clientY-rect.top-offsetY;
+          wrapper.style.left=newLeft+"px"; wrapper.style.top=newTop+"px";
+        }
+      });
+
+      document.addEventListener("touchmove", e=>{
+        if(dragging){
+          const pos=getClientPos(e);
+          const rect=container.getBoundingClientRect();
+          let newLeft=pos.x-rect.left-offsetX;
+          let newTop=pos.y-rect.top-offsetY;
+          wrapper.style.left=newLeft+"px"; wrapper.style.top=newTop+"px";
+        }
+      });
+
+      document.addEventListener("mouseup", ()=>{ dragging=false; });
+      document.addEventListener("touchend", ()=>{ dragging=false; });
+    }
   </script>
 </body>
 </html>
