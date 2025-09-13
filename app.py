@@ -13,28 +13,39 @@ def index():
 # Küche hochladen + Hintergrund entfernen
 @app.route("/upload-kitchen", methods=["POST"])
 def upload_kitchen():
-    file = request.files["image"]
+    try:
+        file = request.files["image"]
 
-    # Aufruf des rembg-Modells von Replicate
-    output = replicate.run(
-        "cjwbw/rembg:1.4.1",
-        input={"image": file}
-    )
+        # Bild in Bytes umwandeln
+        image_bytes = file.read()
 
-    # Debug-Ausgabe im Render-Log
-    print("Replicate-Ausgabe:", output)
+        # Replicate rembg aufrufen
+        output = replicate.run(
+            "cjwbw/rembg:1.4.1",
+            input={"image": image_bytes}
+        )
 
-    # Verschiedene Rückgabe-Formate von Replicate abfangen
-    if isinstance(output, list) and len(output) > 0:
-        return jsonify({"url": output[0]})
-    elif isinstance(output, str):
-        if output.startswith("http"):
-            return jsonify({"url": output})
+        print("Replicate-Ausgabe:", output)
+
+        # Rückgabe-Formate prüfen
+        if isinstance(output, list) and len(output) > 0:
+            return jsonify({"url": output[0]})
+        elif isinstance(output, str):
+            if output.startswith("http"):
+                return jsonify({"url": output})
+            elif output.strip().startswith("iVBOR"):  # PNG Base64
+                return jsonify({"base64": output})
+            else:
+                return jsonify({"error": "Unbekanntes Format", "raw": output}), 500
         else:
-            return jsonify({"base64": output})
-    else:
-        return jsonify({"error": "Fehler beim Freistellen"}), 500
+            return jsonify({"error": "Fehler beim Freistellen", "raw": str(output)}), 500
+
+    except Exception as e:
+        import traceback
+        print("Upload-Kitchen Fehler:", traceback.format_exc())
+        return jsonify({"error": "Serverfehler", "details": str(e)}), 500
 
 
 if __name__ == "__main__":
+    # Lokal starten
     app.run(host="0.0.0.0", port=5000, debug=True)
