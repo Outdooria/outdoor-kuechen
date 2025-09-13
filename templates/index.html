@@ -1,23 +1,73 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-<meta charset="utf-8">
-<title>Outdoor-Küche Vorschau</title>
-<style>
-  body{font-family:sans-serif;text-align:center;padding:20px}
-  #container{position:relative;display:inline-block;border:1px solid #ccc}
-  #terrasse{max-width:800px;display:block}
-  #kueche{position:absolute;top:50px;left:50px;width:300px;cursor:move;display:none}
-  .gallery{display:flex;gap:16px;justify-content:center;margin:20px 0;flex-wrap:wrap}
-  .card{width:200px;padding:12px;border-radius:10px;border:1px solid #ddd;text-align:center}
-  .card.selected{border:2px solid #0077cc;box-shadow:0 0 10px rgba(0,119,204,0.2)}
-  .card img{width:100%;height:auto}
-  button{padding:8px 12px;border:none;border-radius:6px;background:#0077cc;color:#fff;cursor:pointer}
-  button.small{padding:6px 10px;font-size:14px}
-</style>
+  <meta charset="utf-8">
+  <title>Outdoor-Küche Vorschau</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      text-align: center;
+      padding: 20px;
+    }
+    #container {
+      position: relative;
+      display: inline-block;
+      border: 1px solid #ccc;
+    }
+    #terrasse {
+      max-width: 800px;
+      display: block;
+    }
+    #kueche {
+      position: absolute;
+      top: 50px;
+      left: 50px;
+      width: 300px;
+      cursor: move;
+      display: none;
+    }
+    .gallery {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+      margin: 20px 0;
+      flex-wrap: wrap;
+    }
+    .card {
+      width: 200px;
+      padding: 12px;
+      border-radius: 10px;
+      border: 1px solid #ddd;
+      text-align: center;
+    }
+    .card.selected {
+      border: 2px solid #0077cc;
+      box-shadow: 0 0 10px rgba(0, 119, 204, 0.2);
+    }
+    .card img {
+      width: 100%;
+      height: auto;
+    }
+    button {
+      padding: 8px 12px;
+      border: none;
+      border-radius: 6px;
+      background: #0077cc;
+      color: #fff;
+      cursor: pointer;
+    }
+    button.selected {
+      background: #28a745;
+    }
+    button.small {
+      padding: 6px 10px;
+      font-size: 14px;
+    }
+  </style>
 </head>
 <body>
   <h2>Outdoor-Küche Vorschau</h2>
+
   <form id="uploadForm" enctype="multipart/form-data">
     <p>Terrassenfoto hochladen:</p>
     <input type="file" name="terrasse" accept="image/*" required><br><br>
@@ -25,15 +75,83 @@
     <input type="file" name="kueche" accept="image/*"><br><br>
     <button type="submit" class="small">Fotos verarbeiten</button>
   </form>
+
+  <!-- Galerie -->
   <div class="gallery" id="gallery"></div>
+
+  <!-- Container mit Bildern -->
   <div id="container">
     <img id="terrasse" alt="Terrasse">
     <img id="kueche" alt="Küche">
   </div>
+
   <br><br>
   <button id="downloadBtn" style="display:none">Bild speichern</button>
-<script>
-// JS Code hier analog zum letzten Schritt (gekürzt für Übersicht)
-</script>
+
+  <script>
+    const gallery = document.getElementById("gallery");
+    const terrasse = document.getElementById("terrasse");
+    const kueche = document.getElementById("kueche");
+    const container = document.getElementById("container");
+    const downloadBtn = document.getElementById("downloadBtn");
+
+    // Galerie laden
+    fetch(window.location.origin + "/static/kitchens.json")
+      .then(res => {
+        if (!res.ok) throw new Error("HTTP-Fehler " + res.status);
+        return res.json();
+      })
+      .then(data => {
+        console.log("Galerie geladen:", data);
+        data.forEach(item => {
+          const card = document.createElement("div");
+          card.className = "card";
+          card.innerHTML = `
+            <img src="${item.image}" alt="${item.name}">
+            <h4>${item.name}</h4>
+            <p>${item.description}</p>
+            <button>Auswählen</button>
+          `;
+          const btn = card.querySelector("button");
+          btn.addEventListener("click", () => {
+            selectKitchen(item.image, card);
+          });
+          gallery.appendChild(card);
+        });
+      })
+      .catch(err => console.error("Fehler beim Laden der Galerie:", err));
+
+    // Auswahl-Logik
+    function selectKitchen(src, cardElement) {
+      kueche.src = src;
+      kueche.style.display = "block";
+      downloadBtn.style.display = "inline-block";
+
+      // Alle Karten zurücksetzen
+      document.querySelectorAll(".card").forEach(c => {
+        c.classList.remove("selected");
+        const b = c.querySelector("button");
+        b.textContent = "Auswählen";
+        b.classList.remove("selected");
+      });
+
+      // Aktuelle Karte markieren
+      cardElement.classList.add("selected");
+      const currentBtn = cardElement.querySelector("button");
+      currentBtn.textContent = "Ausgewählt ✅";
+      currentBtn.classList.add("selected");
+
+      // Küche mittig platzieren & skalieren
+      const rect = container.getBoundingClientRect();
+      kueche.onload = () => {
+        const targetWidth = terrasse.width * 0.4;
+        kueche.width = targetWidth;
+        const x = (rect.width - kueche.width) / 2;
+        const y = (rect.height - kueche.height) / 2;
+        kueche.style.left = x + "px";
+        kueche.style.top = y + "px";
+      };
+    }
+  </script>
 </body>
 </html>
