@@ -128,9 +128,224 @@
     const kuecheInput   = document.querySelector('input[name="kueche"]');
     const previewDiv = document.getElementById("preview");
 
-    // ... (alle bisherigen Funktionen bleiben gleich)
+    let activeKitchen = null;
+    let kitchenCounter = 0;
+    let undoStack = [];
+    let redoStack = [];
 
-    // ✅ Raster-Fix
+    // --- State Management ---
+    function saveState() {
+      const state = Array.from(document.querySelectorAll(".kueche-wrapper")).map(w => ({
+        src: w.querySelector("img").src,
+        name: w.dataset.name,
+        left: w.style.left,
+        top: w.style.top,
+        width: w.querySelector("img").style.width,
+        rotation: w.dataset.rotation
+      }));
+      undoStack.push(JSON.stringify(state));
+      if (undoStack.length > 50) undoStack.shift();
+      redoStack = [];
+    }
+
+    function restoreState(stateStr) {
+      document.querySelectorAll(".kueche-wrapper").forEach(w => w.remove());
+      const state = JSON.parse(stateStr);
+      state.forEach(item => {
+        addKitchen(item.src, item.name, item.left, item.top, item.width, item.rotation, false);
+      });
+    }
+
+    // --- Terrasse laden ---
+    terrasseInput.addEventListener("change", (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => { terrasse.src = ev.target.result; };
+      reader.readAsDataURL(file);
+    });
+
+    // --- Eigene Küche hochladen ---
+    uploadForm.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const file = kuecheInput.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => { addKitchen(ev.target.result, "Eigene Küche"); };
+      reader.readAsDataURL(file);
+    });
+
+    // --- Galerie laden ---
+    fetch(window.location.origin + "/static/kitchens.json")
+      .then(res => res.json())
+      .then(data => {
+        data.forEach(item => {
+          const card=document.createElement("div");
+          card.className="card";
+          card.innerHTML=`
+            <img src="${item.image}" alt="${item.name}">
+            <h4>${item.name}</h4>
+            <p>${item.description}</p>
+            <button>Hinzufügen</button>
+          `;
+          card.querySelector("button").addEventListener("click", ()=> addKitchen(item.image,item.name));
+          gallery.appendChild(card);
+        });
+      })
+      .catch(err => console.error("Galerie-Fehler:", err));
+
+    // --- Küche hinzufügen ---
+    function addKitchen(src, name="Küche", left="100px", top="100px", width="300px", rotation=0, pushState=true) {
+      kitchenCounter++;
+      const wrapper=document.createElement("div");
+      wrapper.className="kueche-wrapper";
+      wrapper.style.left=left; wrapper.style.top=top;
+      wrapper.dataset.rotation=rotation; wrapper.dataset.name=name;
+
+      const img=document.createElement("img"); img.src=src; img.className="kueche"; img.style.width=width;
+      const resize=document.createElement("div"); resize.className="handle resizeHandle";
+      const rotate=document.createElement("div"); rotate.className="handle rotateHandle";
+
+      wrapper.appendChild(img); wrapper.appendChild(resize); wrapper.appendChild(rotate);
+      container.appendChild(wrapper);
+      setActiveKitchen(wrapper);
+      makeInteractive(wrapper,img,resize,rotate);
+      updateList();
+      downloadBtn.style.display="inline-block";
+      if (pushState) saveState();
+    }
+
+    // --- Aktive Küche setzen ---
+    function setActiveKitchen(wrapper) {
+      document.querySelectorAll(".kueche-wrapper").forEach(w=>w.classList.remove("active"));
+      wrapper.classList.add("active");
+      activeKitchen=wrapper;
+      updateList();
+    }
+
+    // --- Liste aktualisieren ---
+    function updateList() {
+      listItems.innerHTML="";
+      document.querySelectorAll(".kueche-wrapper").forEach(wrapper=>{
+        const div=document.createElement("div");
+        div.className="list-item";
+        if(wrapper.classList.contains("active")) div.classList.add("active");
+        div.textContent=wrapper.dataset.name;
+
+        const btn=document.createElement("button");
+        btn.textContent="✖";
+        btn.addEventListener("click", ()=>{
+          wrapper.remove();
+          updateList();
+          saveState();
+        });
+        div.appendChild(btn);
+        listItems.appendChild(div);
+      });
+    }
+
+    // --- Hilfsfunktion ---
+    function getClientPos(e) {
+      if (e.touches && e.touches.length > 0) {
+        return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      } else {
+        return { x: e.clientX, y: e.clientY };
+      }
+    }
+
+    // --- Küche interaktiv machen ---
+    function makeInteractive(wrapper,img,resize,rotate) {
+      wrapper.addEventListener("mousedown",()=>setActiveKitchen(wrapper));
+      wrapper.addEventListener("touchstart",()=>setActiveKitchen(wrapper));
+
+      let dragging=false, resizing=false, rotating=false;
+      let offsetX=0, offsetY=0, startX=0, startY=0, startWidth=0, startHeight=0, startAngle=0;
+
+      img.addEventListener("mousedown", e=>{ dragging=true; offsetX=e.offsetX; offsetY=e.offsetY; });
+      img.addEventListener("touchstart", e=>{
+        const pos=getClientPos(e);
+        dragging=true;
+        offsetX=pos.x-wrapper.getBoundingClientRect().left;
+        offsetY=pos.y-wrapper.getBoundingClientRect().top;
+        e.preventDefault();
+      });
+
+      resize.addEventListener("mousedown", e=>{
+        e.stopPropagation();
+        resizing=true;
+        startX=e.clientX; startY=e.clientY;
+        startWidth=img.offsetWidth; startHeight=img.offsetHeight;
+      });
+      resize.addEventListener("touchstart", e=>{
+        e.stopPropagation();
+        const pos=getClientPos(e);
+        resizing=true;
+        startX=pos.x; startY=pos.y;
+        startWidth=img.offsetWidth; startHeight=img.offsetHeight;
+        e.preventDefault();
+      });
+
+      rotate.addEventListener("mousedown", e=>{
+        e.stopPropagation();
+        rotating=true;
+        startX=e.clientX; startY=e.clientY;
+        const rect=wrapper.getBoundingClientRect();
+        startAngle=Math.atan2(startY-rect.top-rect.height/2,startX-rect.left-rect.width/2)-parseFloat(wrapper.dataset.rotation||"0");
+      });
+      rotate.addEventListener("touchstart", e=>{
+        e.stopPropagation();
+        const pos=getClientPos(e);
+        rotating=true;
+        startX=pos.x; startY=pos.y;
+        const rect=wrapper.getBoundingClientRect();
+        startAngle=Math.atan2(startY-rect.top-rect.height/2,pos.x-rect.left-rect.width/2)-parseFloat(wrapper.dataset.rotation||"0");
+        e.preventDefault();
+      });
+
+      document.addEventListener("mousemove", e=>{
+        if(dragging){
+          const rect=container.getBoundingClientRect();
+          wrapper.style.left=(e.clientX-rect.left-offsetX)+"px";
+          wrapper.style.top=(e.clientY-rect.top-offsetY)+"px";
+        }
+        if(resizing){
+          let dx=e.clientX-startX;
+          img.style.width=(startWidth+dx)+"px";
+          img.style.height="auto";
+        }
+        if(rotating){
+          const rect=wrapper.getBoundingClientRect();
+          const angle=Math.atan2(e.clientY-rect.top-rect.height/2,e.clientX-rect.left-rect.width/2)-startAngle;
+          wrapper.dataset.rotation=angle;
+          wrapper.style.transform=`rotate(${angle}rad)`;
+        }
+      });
+
+      document.addEventListener("touchmove", e=>{
+        const pos=getClientPos(e);
+        if(dragging){
+          const rect=container.getBoundingClientRect();
+          wrapper.style.left=(pos.x-rect.left-offsetX)+"px";
+          wrapper.style.top=(pos.y-rect.top-offsetY)+"px";
+        }
+        if(resizing){
+          let dx=pos.x-startX;
+          img.style.width=(startWidth+dx)+"px";
+          img.style.height="auto";
+        }
+        if(rotating){
+          const rect=wrapper.getBoundingClientRect();
+          const angle=Math.atan2(pos.y-rect.top-rect.height/2,pos.x-rect.left-rect.width/2)-startAngle;
+          wrapper.dataset.rotation=angle;
+          wrapper.style.transform=`rotate(${angle}rad)`;
+        }
+      });
+
+      document.addEventListener("mouseup", ()=>{ if(dragging||resizing||rotating) saveState(); dragging=resizing=rotating=false; });
+      document.addEventListener("touchend", ()=>{ if(dragging||resizing||rotating) saveState(); dragging=resizing=rotating=false; });
+    }
+
+    // --- Buttons ---
     document.getElementById("toggleGridBtn").addEventListener("click", (e) => {
       container.classList.toggle("grid");
       if (container.classList.contains("grid")) {
@@ -140,7 +355,99 @@
       }
     });
 
-    // ... (Undo, Redo, Reset, Download + Vorschau wie gehabt)
+    document.getElementById("undoBtn").addEventListener("click", () => {
+      if (undoStack.length > 1) {
+        redoStack.push(undoStack.pop());
+        restoreState(undoStack[undoStack.length - 1]);
+      }
+    });
+
+    document.getElementById("redoBtn").addEventListener("click", () => {
+      if (redoStack.length > 0) {
+        const state = redoStack.pop();
+        undoStack.push(state);
+        restoreState(state);
+      }
+    });
+
+    document.getElementById("resetBtn").addEventListener("click", () => {
+      document.querySelectorAll(".kueche-wrapper").forEach(w => w.remove());
+      updateList();
+      undoStack = [];
+      redoStack = [];
+    });
+
+    // --- Download + Vorschau + Teilen ---
+    downloadBtn.addEventListener("click", () => {
+      const canvas = document.getElementById("resultCanvas");
+      const ctx = canvas.getContext("2d");
+
+      canvas.width = terrasse.naturalWidth;
+      canvas.height = terrasse.naturalHeight;
+
+      ctx.drawImage(terrasse, 0, 0, canvas.width, canvas.height);
+
+      document.querySelectorAll(".kueche-wrapper").forEach(wrapper => {
+        const img = wrapper.querySelector("img");
+        if (!img.complete) return;
+
+        const scale = img.offsetWidth / img.naturalWidth;
+        const rotation = parseFloat(wrapper.dataset.rotation || "0");
+
+        const rectTerrasse = terrasse.getBoundingClientRect();
+        const rectWrapper = wrapper.getBoundingClientRect();
+        const scaleX = canvas.width / rectTerrasse.width;
+        const scaleY = canvas.height / rectTerrasse.height;
+
+        const x = (rectWrapper.left - rectTerrasse.left) * scaleX;
+        const y = (rectWrapper.top - rectTerrasse.top) * scaleY;
+
+        const w = img.naturalWidth * scale * scaleX;
+        const h = img.naturalHeight * scale * scaleY;
+
+        ctx.save();
+        ctx.translate(x + w/2, y + h/2);
+        ctx.rotate(rotation);
+        ctx.drawImage(img, -w/2, -h/2, w, h);
+        ctx.restore();
+      });
+
+      const dataURL = canvas.toDataURL("image/png");
+
+      // Download
+      const link = document.createElement("a");
+      link.download = "outdoor_kueche.png";
+      link.href = dataURL;
+      link.click();
+
+      // Vorschau + Teilen
+      previewDiv.innerHTML = `
+        <h3>Vorschau:</h3>
+        <img src="${dataURL}" alt="Vorschau">
+        <br>
+        <button onclick="downloadPreview('${dataURL}')">Download aus Vorschau</button>
+        <button onclick="shareWhatsApp()">�� WhatsApp teilen</button>
+        <button onclick="shareEmail()">�� E-Mail teilen</button>
+      `;
+    });
+
+    function downloadPreview(url) {
+      const link = document.createElement("a");
+      link.download = "outdoor_kueche.png";
+      link.href = url;
+      link.click();
+    }
+
+    function shareWhatsApp() {
+      const text = "Schau dir meine geplante Outdoor-Küche an! " + window.location.href;
+      window.open("https://api.whatsapp.com/send?text=" + encodeURIComponent(text), "_blank");
+    }
+
+    function shareEmail() {
+      const subject = "Meine Outdoor-Küche";
+      const body = "Hallo,\n\nschau dir meine geplante Outdoor-Küche an!\n\n" + window.location.href;
+      window.location.href = "mailto:?subject=" + encodeURIComponent(subject) + "&body=" + encodeURIComponent(body);
+    }
   </script>
 </body>
 </html>
