@@ -1,6 +1,7 @@
 import os
 import replicate
 from flask import Flask, render_template, request, jsonify
+from io import BytesIO
 
 app = Flask(__name__)
 
@@ -16,13 +17,13 @@ def upload_kitchen():
     try:
         file = request.files["image"]
 
-        # Bild in Bytes umwandeln
-        image_bytes = file.read()
+        # Bild als Datei-Stream (file-like object) umwandeln
+        image_stream = BytesIO(file.read())
 
         # Replicate rembg aufrufen
         output = replicate.run(
             "cjwbw/rembg:1.4.1",
-            input={"image": image_bytes}
+            input={"image": image_stream}
         )
 
         print("Replicate-Ausgabe:", output)
