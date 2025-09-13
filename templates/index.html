@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
   <meta charset="utf-8" />
-  <title>Outdoor-Küche Vorschau (stabiles Perspektiv-Warp)</title>
+  <title>Outdoor-Küche Vorschau</title>
   <style>
     body { font-family: system-ui, sans-serif; margin: 0; padding: 16px; text-align: center; }
     #konva-container { border: 1px solid #ccc; margin: 16px auto; display: inline-block; max-width: 95vw; }
@@ -12,6 +12,7 @@
     #controls { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin: 12px 0; }
     button, select { padding: 10px 14px; border-radius: 6px; border: none; color: #fff; background: #0077cc; cursor: pointer; }
     #groupBtn { background:#6f42c1; } #ungroupBtn{background:#20c997;} #deleteKitchenBtn{background:#dc3545;}
+    #scaleModeBtn{background:#ff8800;}
     #kitchenSelect{ background:#555; min-width: 200px; }
     #preview img{ max-width:100%; border:1px solid #ccc; border-radius:6px; margin-top:10px; }
   </style>
@@ -30,6 +31,7 @@
   <div id="controls">
     <select id="kitchenSelect" multiple size="3"></select>
     <button type="button" id="toggleGridBtn">Raster anzeigen</button>
+    <button type="button" id="scaleModeBtn">Skaliermodus umschalten</button>
     <button type="button" id="groupBtn">Gruppieren</button>
     <button type="button" id="ungroupBtn">Gruppe lösen</button>
     <button type="button" id="deleteKitchenBtn">Küche löschen</button>
@@ -45,6 +47,7 @@
     let kitchens = [];   // { id, baseCanvas, viewCanvas, imageNode, handles[], group }
     let groups = [];
     let transformer;
+    let scaleMode = null; // merkt sich, welche Küche gerade im Skaliermodus ist
 
     function initStage(width, height) {
       document.getElementById('konva-container').innerHTML = '';
@@ -55,7 +58,8 @@
       transformer = new Konva.Transformer({
         rotateEnabled: true,
         enabledAnchors: ['top-left','top-right','bottom-left','bottom-right'],
-        ignoreStroke: true
+        ignoreStroke: true,
+        keepRatio: true
       });
       layer.add(transformer);
 
@@ -64,7 +68,7 @@
       updateDropdown();
     }
 
-    // Terrasse laden + auf max Breite skalieren
+    // Terrasse laden
     document.getElementById('terrasseInput').addEventListener('change', (e) => {
       const file = e.target.files?.[0]; if (!file) return;
       const reader = new FileReader();
@@ -102,49 +106,36 @@
           card.querySelector('button').addEventListener('click', () => addKitchen(item.image));
           g.appendChild(card);
         });
-      })
-      .catch(()=>{});
+      });
 
-    // --- Mathe: affine Abbildung für Dreieck-zu-Dreieck ---
+    // Mathe: affine Abbildung für Dreieck-zu-Dreieck
     function mapTriangle(ctx, s0,s1,s2, d0,d1,d2) {
-      // Quelle -> Ziel (Formeln für ctx.transform)
       const denom = (s0[0]*(s1[1]-s2[1]) + s1[0]*(s2[1]-s0[1]) + s2[0]*(s0[1]-s1[1]));
       if (denom === 0) return;
-
       const a = (d0[0]*(s1[1]-s2[1]) + d1[0]*(s2[1]-s0[1]) + d2[0]*(s0[1]-s1[1]))/denom;
       const b = (d0[1]*(s1[1]-s2[1]) + d1[1]*(s2[1]-s0[1]) + d2[1]*(s0[1]-s1[1]))/denom;
       const c = (d0[0]*(s2[0]-s1[0]) + d1[0]*(s0[0]-s2[0]) + d2[0]*(s1[0]-s0[0]))/denom;
       const d = (d0[1]*(s2[0]-s1[0]) + d1[1]*(s0[0]-s2[0]) + d2[1]*(s1[0]-s0[0]))/denom;
       const e = (d0[0]*(s1[0]*s2[1]-s2[0]*s1[1]) + d1[0]*(s2[0]*s0[1]-s0[0]*s2[1]) + d2[0]*(s0[0]*s1[1]-s1[0]*s0[1]))/denom;
       const f = (d0[1]*(s1[0]*s2[1]-s2[0]*s1[1]) + d1[1]*(s2[0]*s0[1]-s0[0]*s2[1]) + d2[1]*(s0[0]*s1[1]-s1[0]*s0[1]))/denom;
-
       ctx.transform(a,b,c,d,e,f);
     }
 
-    // Rendert baseCanvas (Quelle) in viewCanvas (Ziel) anhand 4 Punkte
     function warpToCanvas(baseCanvas, viewCanvas, dstPts) {
       const ctx = viewCanvas.getContext('2d');
       ctx.clearRect(0,0,viewCanvas.width, viewCanvas.height);
-
       const w = baseCanvas.width, h = baseCanvas.height;
       const s = [[0,0],[w,0],[w,h],[0,h]];
       const d = dstPts;
-
       function drawTri(s0,s1,s2, d0,d1,d2) {
         ctx.save();
         ctx.beginPath();
-        ctx.moveTo(d0[0], d0[1]);
-        ctx.lineTo(d1[0], d1[1]);
-        ctx.lineTo(d2[0], d2[1]);
-        ctx.closePath();
+        ctx.moveTo(d0[0], d0[1]); ctx.lineTo(d1[0], d1[1]); ctx.lineTo(d2[0], d2[1]); ctx.closePath();
         ctx.clip();
-
         mapTriangle(ctx, s0,s1,s2, d0,d1,d2);
         ctx.drawImage(baseCanvas, 0, 0);
         ctx.restore();
       }
-
-      // zwei Dreiecke: (0,1,2) und (0,2,3)
       drawTri(s[0],s[1],s[2], d[0],d[1],d[2]);
       drawTri(s[0],s[2],s[3], d[0],d[2],d[3]);
     }
@@ -154,185 +145,89 @@
       const img = new Image();
       img.crossOrigin = 'anonymous';
       img.onload = () => {
-        // Startgröße schön handlich
-        const targetW = 300, targetH = (img.height/img.width) * 300;
-
-        // baseCanvas = Bild in Arbeitsgröße (Quelle)
+        const targetW = 300, targetH = (img.height/img.width)*300;
         const baseCanvas = document.createElement('canvas');
-        baseCanvas.width = Math.max(1, Math.round(targetW));
-        baseCanvas.height = Math.max(1, Math.round(targetH));
-        baseCanvas.getContext('2d').drawImage(img, 0,0, img.width, img.height, 0,0, baseCanvas.width, baseCanvas.height);
-
-        // viewCanvas = Raster für verzerrtes Ergebnis (Ziel)
+        baseCanvas.width = targetW; baseCanvas.height = targetH;
+        baseCanvas.getContext('2d').drawImage(img,0,0,targetW,targetH);
         const viewCanvas = document.createElement('canvas');
-        viewCanvas.width = baseCanvas.width;
-        viewCanvas.height = baseCanvas.height;
+        viewCanvas.width = targetW; viewCanvas.height = targetH;
 
-        // Startposition und Handles
-        const startX = 100, startY = 100;
-        const handles = [
-          new Konva.Circle({ x: startX,                 y: startY,                  radius: 7, fill: 'red', draggable: true }),
-          new Konva.Circle({ x: startX+targetW,         y: startY,                  radius: 7, fill: 'red', draggable: true }),
-          new Konva.Circle({ x: startX+targetW,         y: startY+targetH,          radius: 7, fill: 'red', draggable: true }),
-          new Konva.Circle({ x: startX,                 y: startY+targetH,          radius: 7, fill: 'red', draggable: true })
+        const startX=100, startY=100;
+        const handles=[
+          new Konva.Circle({x:startX,y:startY,radius:7,fill:'red',draggable:true}),
+          new Konva.Circle({x:startX+targetW,y:startY,radius:7,fill:'red',draggable:true}),
+          new Konva.Circle({x:startX+targetW,y:startY+targetH,radius:7,fill:'red',draggable:true}),
+          new Konva.Circle({x:startX,y:startY+targetH,radius:7,fill:'red',draggable:true})
         ];
-        handles.forEach(h => layer.add(h));
+        handles.forEach(h=>layer.add(h));
 
-        // Konva.Image zeigt viewCanvas
         const imageNode = new Konva.Image({
-          image: viewCanvas,
-          x: startX, y: startY,
-          width: viewCanvas.width, height: viewCanvas.height,
-          draggable: true
+          image:viewCanvas,x:startX,y:startY,width:viewCanvas.width,height:viewCanvas.height,draggable:true
         });
         layer.add(imageNode);
 
-        // --- Update-Funktion: berechnet BoundingBox & warpt ins Canvas ---
         function updateWarp() {
-          const pts = handles.map(h => [h.x(), h.y()]);
-          const xs = pts.map(p => p[0]);
-          const ys = pts.map(p => p[1]);
-          const minX = Math.min(...xs), minY = Math.min(...ys);
-          const maxX = Math.max(...xs), maxY = Math.max(...ys);
-          const bw = Math.max(1, Math.ceil(maxX - minX));
-          const bh = Math.max(1, Math.ceil(maxY - minY));
-
-          // Ziel-Canvas dynamisch anpassen (wichtig gegen "Beschneiden")
-          if (viewCanvas.width !== bw || viewCanvas.height !== bh) {
-            viewCanvas.width = bw;
-            viewCanvas.height = bh;
-            imageNode.width(bw);
-            imageNode.height(bh);
-          }
-
-          // Zielpunkte relativ zum (minX,minY)
-          const dstRel = pts.map(p => [p[0]-minX, p[1]-minY]);
-          // Image-Node an (minX,minY) setzen
-          imageNode.position({ x: minX, y: minY });
-
-          // tatsächliches Warp-Rendering
-          warpToCanvas(baseCanvas, viewCanvas, dstRel);
-
+          const pts = handles.map(h=>[h.x(),h.y()]);
+          const xs=pts.map(p=>p[0]), ys=pts.map(p=>p[1]);
+          const minX=Math.min(...xs), minY=Math.min(...ys);
+          const maxX=Math.max(...xs), maxY=Math.max(...ys);
+          const bw=Math.max(1,Math.ceil(maxX-minX));
+          const bh=Math.max(1,Math.ceil(maxY-minY));
+          if(viewCanvas.width!==bw||viewCanvas.height!==bh){viewCanvas.width=bw;viewCanvas.height=bh;imageNode.width(bw);imageNode.height(bh);}
+          const dstRel=pts.map(p=>[p[0]-minX,p[1]-minY]);
+          imageNode.position({x:minX,y:minY});
+          warpToCanvas(baseCanvas,viewCanvas,dstRel);
           layer.batchDraw();
         }
-
-        // Erstes Rendering
         updateWarp();
+        handles.forEach(h=>h.on('dragmove',updateWarp));
+        let lastPos={x:imageNode.x(),y:imageNode.y()};
+        imageNode.on('dragstart',()=>{lastPos={x:imageNode.x(),y:imageNode.y()};});
+        imageNode.on('dragmove',()=>{const dx=imageNode.x()-lastPos.x;const dy=imageNode.y()-lastPos.y;lastPos={x:imageNode.x(),y:imageNode.y()};handles.forEach(h=>{h.x(h.x()+dx);h.y(h.y()+dy);});updateWarp();});
 
-        // Handle-Drag -> neu rendern
-        handles.forEach(h => h.on('dragmove', updateWarp));
-
-        // Ganzes Bild ziehen: Handles mitbewegen
-        let lastPos = { x: imageNode.x(), y: imageNode.y() };
-        imageNode.on('dragstart', () => { lastPos = { x: imageNode.x(), y: imageNode.y() }; });
-        imageNode.on('dragmove', () => {
-          const dx = imageNode.x() - lastPos.x;
-          const dy = imageNode.y() - lastPos.y;
-          lastPos = { x: imageNode.x(), y: imageNode.y() };
-          handles.forEach(h => { h.x(h.x()+dx); h.y(h.y()+dy); });
-          updateWarp();
-        });
-
-        const id = 'Küche ' + (kitchens.length+1);
-        kitchens.push({ id, baseCanvas, viewCanvas, imageNode, handles, group: null });
-        updateDropdown();
-        layer.draw();
+        const id='Küche '+(kitchens.length+1);
+        kitchens.push({id,baseCanvas,viewCanvas,imageNode,handles,group:null});
+        updateDropdown(); layer.draw();
       };
-      img.src = url;
+      img.src=url;
     }
 
     // Dropdown pflegen
     function updateDropdown() {
-      const sel = document.getElementById('kitchenSelect');
-      sel.innerHTML = '';
-      kitchens.forEach((k,i) => {
-        const opt = document.createElement('option');
-        opt.value = i;
-        opt.textContent = k.id + (k.group ? ' (Gruppe)' : '');
-        sel.appendChild(opt);
-      });
+      const sel=document.getElementById('kitchenSelect'); sel.innerHTML='';
+      kitchens.forEach((k,i)=>{const opt=document.createElement('option');opt.value=i;opt.textContent=k.id+(k.group?' (Gruppe)':'');sel.appendChild(opt);});
     }
 
-    // Gruppieren (nur Bilder, Handles ausblenden)
-    document.getElementById('groupBtn').addEventListener('click', () => {
-      const sel = document.getElementById('kitchenSelect');
-      const idxs = Array.from(sel.selectedOptions).map(o => parseInt(o.value));
-      if (idxs.length < 2) return;
-
-      const group = new Konva.Group({ draggable: true });
-      idxs.forEach(i => {
-        const k = kitchens[i];
-        if (!k.group) {
-          group.add(k.imageNode);
-          k.handles.forEach(h => h.hide());
-          k.group = group;
-        }
-      });
-      layer.add(group);
-      groups.push(group);
-      transformer.nodes([group]);
-      layer.draw();
-      updateDropdown();
-    });
-
-    // Gruppe lösen
-    document.getElementById('ungroupBtn').addEventListener('click', () => {
-      groups.forEach(g => {
-        g.getChildren().forEach(child => {
-          layer.add(child);
-          const k = kitchens.find(kk => kk.imageNode === child);
-          if (k) { k.group = null; k.handles.forEach(h => h.show()); }
-        });
-        g.destroy();
-      });
-      transformer.nodes([]);
-      groups = [];
-      layer.draw();
-      updateDropdown();
-    });
-
-    // Küche löschen
-    document.getElementById('deleteKitchenBtn').addEventListener('click', () => {
-      const sel = document.getElementById('kitchenSelect');
-      const idxs = Array.from(sel.selectedOptions).map(o => parseInt(o.value)).sort((a,b)=>b-a);
-      idxs.forEach(i => {
-        const k = kitchens[i];
-        k.imageNode.destroy();
-        k.handles.forEach(h => h.destroy());
-        kitchens.splice(i,1);
-      });
-      transformer.nodes([]);
-      layer.draw();
-      updateDropdown();
-    });
-
-    // Raster
-    let gridOn = false;
-    document.getElementById('toggleGridBtn').addEventListener('click', (e) => {
-      gridOn = !gridOn;
-      layer.find('.gridLine').forEach(l => l.destroy());
-      if (gridOn) {
-        const gs = 50;
-        for (let x=0; x<stage.width(); x+=gs) {
-          layer.add(new Konva.Line({ points:[x,0,x,stage.height()], stroke:'#ddd', strokeWidth:1, name:'gridLine' }));
-        }
-        for (let y=0; y<stage.height(); y+=gs) {
-          layer.add(new Konva.Line({ points:[0,y,stage.width(),y], stroke:'#ddd', strokeWidth:1, name:'gridLine' }));
-        }
-        e.target.textContent = 'Raster ausblenden';
+    // Skaliermodus
+    document.getElementById('scaleModeBtn').addEventListener('click', () => {
+      const sel=document.getElementById('kitchenSelect');
+      const idx=parseInt(sel.value);
+      if(isNaN(idx)) return;
+      const k=kitchens[idx];
+      if(scaleMode===k){
+        transformer.nodes([]);
+        k.handles.forEach(h=>h.show());
+        scaleMode=null;
       } else {
-        e.target.textContent = 'Raster anzeigen';
+        kitchens.forEach(kk=>kk.handles.forEach(h=>h.show()));
+        k.handles.forEach(h=>h.hide());
+        transformer.nodes([k.imageNode]);
+        scaleMode=k;
       }
       layer.draw();
     });
 
+    // Gruppieren / Lösen / Löschen wie bisher
+    document.getElementById('groupBtn').addEventListener('click',()=>{const sel=document.getElementById('kitchenSelect');const idxs=Array.from(sel.selectedOptions).map(o=>parseInt(o.value));if(idxs.length<2)return;const group=new Konva.Group({draggable:true});idxs.forEach(i=>{const k=kitchens[i];if(!k.group){group.add(k.imageNode);k.handles.forEach(h=>h.hide());k.group=group;}});layer.add(group);groups.push(group);transformer.nodes([group]);layer.draw();updateDropdown();});
+    document.getElementById('ungroupBtn').addEventListener('click',()=>{groups.forEach(g=>{g.getChildren().forEach(child=>{layer.add(child);const k=kitchens.find(kk=>kk.imageNode===child);if(k){k.group=null;k.handles.forEach(h=>h.show());}});g.destroy();});transformer.nodes([]);groups=[];layer.draw();updateDropdown();});
+    document.getElementById('deleteKitchenBtn').addEventListener('click',()=>{const sel=document.getElementById('kitchenSelect');const idxs=Array.from(sel.selectedOptions).map(o=>parseInt(o.value)).sort((a,b)=>b-a);idxs.forEach(i=>{const k=kitchens[i];k.imageNode.destroy();k.handles.forEach(h=>h.destroy());kitchens.splice(i,1);});transformer.nodes([]);layer.draw();updateDropdown();});
+
+    // Raster
+    let gridOn=false;
+    document.getElementById('toggleGridBtn').addEventListener('click',(e)=>{gridOn=!gridOn;layer.find('.gridLine').forEach(l=>l.destroy());if(gridOn){const gs=50;for(let x=0;x<stage.width();x+=gs){layer.add(new Konva.Line({points:[x,0,x,stage.height()],stroke:'#ddd',strokeWidth:1,name:'gridLine'}));}for(let y=0;y<stage.height();y+=gs){layer.add(new Konva.Line({points:[0,y,stage.width(),y],stroke:'#ddd',strokeWidth:1,name:'gridLine'}));}e.target.textContent='Raster ausblenden';}else{e.target.textContent='Raster anzeigen';}layer.draw();});
+
     // Download
-    document.getElementById('downloadBtn').addEventListener('click', () => {
-      const dataURL = stage.toDataURL({ pixelRatio: 2 });
-      const a = document.createElement('a');
-      a.href = dataURL; a.download = 'outdoor_kueche.png'; a.click();
-      document.getElementById('preview').innerHTML = '<h3>Vorschau:</h3><img src="'+dataURL+'"/>';
-    });
+    document.getElementById('downloadBtn').addEventListener('click',()=>{const dataURL=stage.toDataURL({pixelRatio:2});const a=document.createElement('a');a.href=dataURL;a.download='outdoor_kueche.png';a.click();document.getElementById('preview').innerHTML='<h3>Vorschau:</h3><img src="'+dataURL+'"/>';});
   </script>
 </body>
 </html>
