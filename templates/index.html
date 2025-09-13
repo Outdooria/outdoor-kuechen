@@ -71,4 +71,159 @@
 
   <form id="uploadForm" enctype="multipart/form-data">
     <p>Terrassenfoto hochladen:</p>
-    <input type="file"
+    <input type="file" name="terrasse" accept="image/*" required><br><br>
+    <p>Eigene Küche hochladen (optional):</p>
+    <input type="file" name="kueche" accept="image/*"><br><br>
+    <button type="submit" class="small">Fotos verarbeiten (nur für eigene Küche)</button>
+  </form>
+
+  <!-- Galerie -->
+  <div class="gallery" id="gallery"></div>
+
+  <!-- Container mit Bildern -->
+  <div id="container">
+    <img id="terrasse" alt="Terrasse">
+    <img id="kueche" alt="Küche">
+  </div>
+
+  <br><br>
+  <button id="downloadBtn" style="display:none">Bild speichern</button>
+
+  <!-- Unsichtbares Canvas für den Download -->
+  <canvas id="resultCanvas" style="display:none;"></canvas>
+
+  <script>
+    const gallery = document.getElementById("gallery");
+    const terrasse = document.getElementById("terrasse");
+    const kueche = document.getElementById("kueche");
+    const container = document.getElementById("container");
+    const downloadBtn = document.getElementById("downloadBtn");
+
+    // Terrasse automatisch anzeigen, wenn Datei hochgeladen wird
+    document.querySelector('input[name="terrasse"]').addEventListener("change", e => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = ev => {
+        terrasse.src = ev.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+
+    // Galerie laden
+    fetch(window.location.origin + "/static/kitchens.json")
+      .then(res => {
+        if (!res.ok) throw new Error("HTTP-Fehler " + res.status);
+        return res.json();
+      })
+      .then(data => {
+        data.forEach(item => {
+          const card = document.createElement("div");
+          card.className = "card";
+          card.innerHTML = `
+            <img src="${item.image}" alt="${item.name}">
+            <h4>${item.name}</h4>
+            <p>${item.description}</p>
+            <button>Auswählen</button>
+          `;
+          const btn = card.querySelector("button");
+          btn.addEventListener("click", () => {
+            selectKitchen(item.image, card);
+          });
+          gallery.appendChild(card);
+        });
+      })
+      .catch(err => console.error("Fehler beim Laden der Galerie:", err));
+
+    // Galerie-Küche auswählen (läuft komplett im Browser)
+    function selectKitchen(src, cardElement) {
+      kueche.src = src;
+      kueche.style.display = "block";
+      downloadBtn.style.display = "inline-block";
+
+      // Auswahl markieren
+      document.querySelectorAll(".card").forEach(c => {
+        c.classList.remove("selected");
+        const b = c.querySelector("button");
+        b.textContent = "Auswählen";
+        b.classList.remove("selected");
+      });
+
+      cardElement.classList.add("selected");
+      const currentBtn = cardElement.querySelector("button");
+      currentBtn.textContent = "Ausgewählt ✅";
+      currentBtn.classList.add("selected");
+
+      // Küche mittig platzieren
+      const rect = container.getBoundingClientRect();
+      kueche.onload = () => {
+        const targetWidth = terrasse.width * 0.4;
+        kueche.width = targetWidth;
+        const x = (rect.width - kueche.width) / 2;
+        const y = (rect.height - kueche.height) / 2;
+        kueche.style.left = x + "px";
+        kueche.style.top = y + "px";
+      };
+    }
+
+    // Formular-Submit nur für eigene Küchen
+    document.getElementById("uploadForm").addEventListener("submit", async e => {
+      e.preventDefault();
+
+      const formData = new FormData(e.target);
+      const kuecheFile = formData.get("kueche");
+
+      if (!kuecheFile || !kuecheFile.name) {
+        alert("Du hast keine eigene Küche hochgeladen – wähle bitte aus der Galerie.");
+        return;
+      }
+
+      const res = await fetch("/upload", {
+        method: "POST",
+        body: formData
+      });
+
+      if (!res.ok) {
+        alert("Fehler beim Verarbeiten der Bilder.");
+        return;
+      }
+
+      const data = await res.json();
+      terrasse.src = data.terrasse;
+      kueche.src = data.kueche;
+      kueche.style.display = "block";
+      downloadBtn.style.display = "inline-block";
+    });
+
+    // Download-Button: Terrasse + Küche als PNG speichern
+    downloadBtn.addEventListener("click", () => {
+      const canvas = document.getElementById("resultCanvas");
+      const ctx = canvas.getContext("2d");
+
+      // Größe vom Terrassenbild übernehmen
+      canvas.width = terrasse.naturalWidth;
+      canvas.height = terrasse.naturalHeight;
+
+      // Terrasse zeichnen
+      ctx.drawImage(terrasse, 0, 0, canvas.width, canvas.height);
+
+      // Küche zeichnen, wenn sichtbar
+      if (kueche.style.display !== "none") {
+        const scale = terrasse.naturalWidth / terrasse.width;
+        const kuecheX = parseInt(kueche.style.left || 0) * scale;
+        const kuecheY = parseInt(kueche.style.top || 0) * scale;
+        const kuecheW = kueche.width * scale;
+        const kuecheH = kueche.height * scale;
+
+        ctx.drawImage(kueche, kuecheX, kuecheY, kuecheW, kuecheH);
+      }
+
+      // PNG erzeugen & herunterladen
+      const link = document.createElement("a");
+      link.download = "outdoor-kueche.png";
+      link.href = canvas.toDataURL("image/png");
+      link.click();
+    });
+  </script>
+</body>
+</html>
