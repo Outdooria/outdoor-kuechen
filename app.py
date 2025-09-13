@@ -17,7 +17,7 @@ def upload_kitchen():
 
         # Hintergrund entfernen mit 851-labs/background-remover
         output = replicate.run(
-            "851-labs/background-remover:a029dff3",  # Versions-ID aus Replicate
+            "851-labs/background-remover:cuda11.8-python3.10-X64",
             input={"image": image_stream}
         )
 
