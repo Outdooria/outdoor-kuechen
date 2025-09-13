@@ -47,7 +47,7 @@
     let kitchens = [];   // { id, baseCanvas, viewCanvas, imageNode, handles[], group }
     let groups = [];
     let transformer;
-    let scaleMode = null; // merkt sich, welche Küche gerade im Skaliermodus ist
+    let scaleMode = null;
 
     function initStage(width, height) {
       document.getElementById('konva-container').innerHTML = '';
@@ -108,7 +108,7 @@
         });
       });
 
-    // Mathe: affine Abbildung für Dreieck-zu-Dreieck
+    // Mathe: affine Abbildung
     function mapTriangle(ctx, s0,s1,s2, d0,d1,d2) {
       const denom = (s0[0]*(s1[1]-s2[1]) + s1[0]*(s2[1]-s0[1]) + s2[0]*(s0[1]-s1[1]));
       if (denom === 0) return;
@@ -200,24 +200,26 @@
 
     // Skaliermodus
     document.getElementById('scaleModeBtn').addEventListener('click', () => {
-      const sel=document.getElementById('kitchenSelect');
-      const idx=parseInt(sel.value);
-      if(isNaN(idx)) return;
-      const k=kitchens[idx];
-      if(scaleMode===k){
+      const sel = document.getElementById('kitchenSelect');
+      if (!sel.selectedOptions.length) return;
+      const idx = parseInt(sel.selectedOptions[0].value);
+      const k = kitchens[idx];
+
+      if (scaleMode === k) {
         transformer.nodes([]);
-        k.handles.forEach(h=>h.show());
-        scaleMode=null;
+        k.handles.forEach(h => h.show());
+        scaleMode = null;
       } else {
-        kitchens.forEach(kk=>kk.handles.forEach(h=>h.show()));
-        k.handles.forEach(h=>h.hide());
+        kitchens.forEach(kk => kk.handles.forEach(h => h.show()));
+        transformer.nodes([]);
+        k.handles.forEach(h => h.hide());
         transformer.nodes([k.imageNode]);
-        scaleMode=k;
+        scaleMode = k;
       }
       layer.draw();
     });
 
-    // Gruppieren / Lösen / Löschen wie bisher
+    // Gruppieren / Lösen / Löschen
     document.getElementById('groupBtn').addEventListener('click',()=>{const sel=document.getElementById('kitchenSelect');const idxs=Array.from(sel.selectedOptions).map(o=>parseInt(o.value));if(idxs.length<2)return;const group=new Konva.Group({draggable:true});idxs.forEach(i=>{const k=kitchens[i];if(!k.group){group.add(k.imageNode);k.handles.forEach(h=>h.hide());k.group=group;}});layer.add(group);groups.push(group);transformer.nodes([group]);layer.draw();updateDropdown();});
     document.getElementById('ungroupBtn').addEventListener('click',()=>{groups.forEach(g=>{g.getChildren().forEach(child=>{layer.add(child);const k=kitchens.find(kk=>kk.imageNode===child);if(k){k.group=null;k.handles.forEach(h=>h.show());}});g.destroy();});transformer.nodes([]);groups=[];layer.draw();updateDropdown();});
     document.getElementById('deleteKitchenBtn').addEventListener('click',()=>{const sel=document.getElementById('kitchenSelect');const idxs=Array.from(sel.selectedOptions).map(o=>parseInt(o.value)).sort((a,b)=>b-a);idxs.forEach(i=>{const k=kitchens[i];k.imageNode.destroy();k.handles.forEach(h=>h.destroy());kitchens.splice(i,1);});transformer.nodes([]);layer.draw();updateDropdown();});
