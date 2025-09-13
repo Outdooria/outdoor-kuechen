@@ -151,7 +151,9 @@
     // Küche hinzufügen
     function addKitchen(url) {
       const img = new Image();
-      img.crossOrigin = 'anonymous';
+      if (!url.startsWith("data:")) {
+        img.crossOrigin = "anonymous";
+      }
       img.onload = () => {
         const targetW = 300, targetH = (img.height/img.width)*300;
         const baseCanvas = document.createElement('canvas');
@@ -220,7 +222,6 @@
         transformer.nodes([]);
         k.handles.forEach(h => h.show());
         scaleMode = null;
-        console.log("Skaliermodus AUS für", k.id);
       } else {
         kitchens.forEach(kk => kk.handles.forEach(h => h.show()));
         transformer.nodes([]);
@@ -228,12 +229,9 @@
         transformer.nodes([k.imageNode]);
         transformer.moveToTop();
         scaleMode = k;
-        console.log("Skaliermodus AN für", k.id);
       }
       layer.draw();
     });
-
-    // Raster / Download / Gruppieren – kannst du nach Bedarf füllen
 
     // Eigene Küche hochladen + freistellen
     document.getElementById("kitchenUpload").addEventListener("change", async (e) => {
@@ -243,20 +241,27 @@
       const formData = new FormData();
       formData.append("image", file);
 
-      const res = await fetch("/upload-kitchen", {
-        method: "POST",
-        body: formData
-      });
+      try {
+        const res = await fetch("/upload-kitchen", {
+          method: "POST",
+          body: formData
+        });
 
-      const data = await res.json();
-      console.log("Antwort vom Server:", data);
+        const data = await res.json();
+        console.log("Antwort vom Server:", data);
 
-      if (data.url) {
-        addKitchen(data.url);
-      } else if (data.base64) {
-        addKitchen("data:image/png;base64," + data.base64);
-      } else {
-        alert("Fehler beim Freistellen der Küche.");
+        if (data.url) {
+          addKitchen(data.url);
+        } else if (data.base64) {
+          addKitchen("data:image/png;base64," + data.base64);
+        } else if (data.error) {
+          alert("Fehler: " + data.error + (data.details ? ("\n" + data.details) : ""));
+        } else {
+          alert("Unbekannte Antwort vom Server.");
+        }
+      } catch (err) {
+        console.error("Fetch-Fehler:", err);
+        alert("Fehler beim Upload: " + err.message);
       }
     });
   </script>
