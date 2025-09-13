@@ -15,9 +15,9 @@ def upload_kitchen():
         file = request.files["image"]
         image_stream = BytesIO(file.read())
 
-        # Hier wird das neue Modell verwendet
+        # Hintergrund entfernen mit 851-labs/background-remover
         output = replicate.run(
-            "lucataco/remove-bg:95fcc2a2",
+            "851-labs/background-remover:a029dff3",  # Versions-ID aus Replicate
             input={"image": image_stream}
         )
 
