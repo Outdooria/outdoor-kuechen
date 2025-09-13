@@ -22,20 +22,24 @@
 <body>
   <h2>Outdoor-Küche Vorschau</h2>
 
+  <!-- Terrasse -->
   <div>
     <label>Terrassenfoto hochladen:
       <input type="file" id="terrasseInput" accept="image/*,.heic,.heif" />
     </label>
   </div>
 
+  <!-- Eigene Küche -->
   <div>
     <label>Eigene Küche hochladen:
       <input type="file" id="kitchenUpload" accept="image/*" />
     </label>
   </div>
 
+  <!-- Galerie -->
   <div class="gallery" id="gallery"></div>
 
+  <!-- Controls -->
   <div id="controls">
     <select id="kitchenSelect" multiple size="3"></select>
     <button type="button" id="toggleGridBtn">Raster anzeigen</button>
@@ -46,6 +50,7 @@
     <button type="button" id="downloadBtn">Bild speichern</button>
   </div>
 
+  <!-- Canvas + Preview -->
   <div id="konva-container"></div>
   <div id="preview"></div>
 
@@ -53,7 +58,6 @@
   <script>
     let stage, layer, terrasseImg;
     let kitchens = [];
-    let groups = [];
     let transformer;
     let scaleMode = null;
 
@@ -72,7 +76,6 @@
       layer.add(transformer);
 
       kitchens = [];
-      groups = [];
       updateDropdown();
     }
 
@@ -116,14 +119,14 @@
         });
       });
 
-    // Verzerrung (Warp-Funktion, gleich wie vorher)
+    // Warping-Helfer
     function mapTriangle(ctx, s0,s1,s2, d0,d1,d2) {
       const denom = (s0[0]*(s1[1]-s2[1]) + s1[0]*(s2[1]-s0[1]) + s2[0]*(s0[1]-s1[1]));
       if (denom === 0) return;
       const a = (d0[0]*(s1[1]-s2[1]) + d1[0]*(s2[1]-s0[1]) + d2[0]*(s0[1]-s1[1]))/denom;
       const b = (d0[1]*(s1[1]-s2[1]) + d1[1]*(s2[1]-s0[1]) + d2[1]*(s0[1]-s1[1]))/denom;
       const c = (d0[0]*(s2[0]-s1[0]) + d1[0]*(s0[0]-s2[0]) + d2[0]*(s1[0]-s0[0]))/denom;
-      const d = (d0[1]*(s2[0]-s1[0]) + d1[1]*(s0[0]-s2[0]) + d2[1]*(s1[0]-s0[1]))/denom;
+      const d = (d0[1]*(s2[0]-s1[0]) + d1[1]*(s0[0]-s2[0]) + d2[1]*(s1[0]-s0[0]))/denom;
       const e = (d0[0]*(s1[0]*s2[1]-s2[0]*s1[1]) + d1[0]*(s2[0]*s0[1]-s0[0]*s2[1]) + d2[0]*(s0[0]*s1[1]-s1[0]*s0[1]))/denom;
       const f = (d0[1]*(s1[0]*s2[1]-s2[0]*s1[1]) + d1[1]*(s2[0]*s0[1]-s0[0]*s2[1]) + d2[1]*(s0[0]*s1[1]-s1[0]*s0[1]))/denom;
       ctx.transform(a,b,c,d,e,f);
@@ -151,9 +154,7 @@
     // Küche hinzufügen
     function addKitchen(url) {
       const img = new Image();
-      if (!url.startsWith("data:")) {
-        img.crossOrigin = "anonymous";
-      }
+      if (!url.startsWith("data:")) { img.crossOrigin = "anonymous"; }
       img.onload = () => {
         const targetW = 300, targetH = (img.height/img.width)*300;
         const baseCanvas = document.createElement('canvas');
@@ -195,26 +196,22 @@
         imageNode.on('dragstart',()=>{lastPos={x:imageNode.x(),y:imageNode.y()};});
         imageNode.on('dragmove',()=>{const dx=imageNode.x()-lastPos.x;const dy=imageNode.y()-lastPos.y;lastPos={x:imageNode.x(),y:imageNode.y()};handles.forEach(h=>{h.x(h.x()+dx);h.y(h.y()+dy);});updateWarp();});
 
-        const id='Küche '+(kitchens.length+1);
-        kitchens.push({id,baseCanvas,viewCanvas,imageNode,handles,group:null});
+        kitchens.push({id:'Küche '+(kitchens.length+1),baseCanvas,viewCanvas,imageNode,handles});
         updateDropdown(); layer.draw();
       };
       img.src=url;
     }
 
-    // Dropdown pflegen
+    // Dropdown
     function updateDropdown() {
       const sel=document.getElementById('kitchenSelect'); sel.innerHTML='';
-      kitchens.forEach((k,i)=>{const opt=document.createElement('option');opt.value=i;opt.textContent=k.id+(k.group?' (Gruppe)':'');sel.appendChild(opt);});
+      kitchens.forEach((k,i)=>{const opt=document.createElement('option');opt.value=i;opt.textContent=k.id;sel.appendChild(opt);});
     }
 
     // Skaliermodus
     document.getElementById('scaleModeBtn').addEventListener('click', () => {
       const sel = document.getElementById('kitchenSelect');
-      if (!sel.selectedOptions.length) {
-        alert("Bitte zuerst eine Küche auswählen.");
-        return;
-      }
+      if (!sel.selectedOptions.length) { alert("Bitte zuerst eine Küche auswählen."); return; }
       const idx = parseInt(sel.selectedOptions[0].value);
       const k = kitchens[idx];
 
@@ -233,7 +230,7 @@
       layer.draw();
     });
 
-    // Eigene Küche hochladen + freistellen
+    // Eigene Küche hochladen
     document.getElementById("kitchenUpload").addEventListener("change", async (e) => {
       const file = e.target.files[0];
       if (!file) return;
@@ -242,13 +239,13 @@
       formData.append("image", file);
 
       try {
-        const res = await fetch("/upload-kitchen", {
-          method: "POST",
-          body: formData
-        });
+        const preview = document.getElementById("preview");
+        preview.innerHTML = "<p>⏳ Küche wird freigestellt, bitte warten...</p>";
 
+        const res = await fetch("/upload-kitchen", { method: "POST", body: formData });
         const data = await res.json();
         console.log("Antwort vom Server:", data);
+        preview.innerHTML = "";
 
         if (data.url) {
           addKitchen(data.url);
