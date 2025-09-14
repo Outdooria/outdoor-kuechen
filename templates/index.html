@@ -1,405 +1,74 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-  <meta charset="utf-8" />
-  <title>Outdoor-Küche Vorschau</title>
-  <style>
-    :root { --max-canvas: 95vw; }
-    body { font-family: system-ui, sans-serif; margin: 0; padding: 16px; text-align: center; }
-    #konva-container { border: 1px solid #ccc; margin: 16px auto; display: inline-block; max-width: var(--max-canvas); }
-    .gallery { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; margin: 16px 0; }
-    .card { width: 200px; border: 1px solid #ddd; border-radius: 10px; padding: 10px; background: #fff; }
-    .card img { width: 100%; height: auto; border-radius: 8px; }
-    #controls { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin: 12px 0; }
-    button, select, input[type=file] {
-      padding: 10px 14px; border-radius: 6px; border: none; color: #fff; background: #0077cc; cursor: pointer;
-    }
-    #toggleGridBtn{ background:#17a2b8;}
-    #groupBtn { background:#6f42c1; }
-    #ungroupBtn{background:#20c997;}
-    #deleteKitchenBtn{background:#dc3545;}
-    #scaleModeBtn{background:#ff8800;}
-    #downloadBtn{background:#2b9348;}
-    #kitchenSelect{ background:#555; min-width: 220px; }
-    #preview{ min-height: 24px; }
-    #preview p{ margin: 8px 0 0; }
-    label { cursor: pointer; color:#222; }
-    input[type=file] { background:#28a745; color:#fff; cursor:pointer; }
-  </style>
+<meta charset="utf-8">
+<title>Outdoor-Küche Vorschau</title>
+<style>
+  body{font-family:sans-serif;text-align:center;padding:20px}
+  #container{position:relative;display:inline-block;border:1px solid #ccc}
+  #terrasse{max-width:800px;display:block}
+  #kueche{
+    position:absolute;
+    top:50px;
+    left:50px;
+    cursor:move;
+    display:none;
+  }
+  .gallery{display:flex;gap:16px;justify-content:center;margin:20px 0;flex-wrap:wrap}
+  .card{width:200px;padding:12px;border-radius:10px;border:1px solid #ddd;text-align:center}
+  .card.selected{border:2px solid #0077cc;box-shadow:0 0 10px rgba(0,119,204,0.2)}
+  .card img{width:100%;height:auto}
+  button{padding:8px 12px;border:none;border-radius:6px;background:#0077cc;color:#fff;cursor:pointer}
+  button.small{padding:6px 10px;font-size:14px}
+</style>
 </head>
 <body>
   <h2>Outdoor-Küche Vorschau</h2>
-
-  <!-- Terrasse -->
-  <div>
-    <label>Terrassenfoto hochladen:
-      <input type="file" id="terrasseInput" accept="image/*,.heic,.heif" />
-    </label>
-  </div>
-
-  <!-- Eigene Küche -->
-  <div style="margin-top:8px;">
-    <label>Eigene Küche hochladen:
-      <input type="file" id="kitchenUpload" accept="image/*" />
-    </label>
-  </div>
-
-  <!-- Galerie -->
+  <form id="uploadForm" enctype="multipart/form-data">
+    <p>Terrassenfoto hochladen:</p>
+    <input type="file" name="terrasse" accept="image/*" required><br><br>
+    <p>Eigene Küche hochladen (optional):</p>
+    <input type="file" name="kueche" accept="image/*"><br><br>
+    <button type="submit" class="small">Fotos verarbeiten</button>
+  </form>
   <div class="gallery" id="gallery"></div>
-
-  <!-- Controls -->
-  <div id="controls">
-    <select id="kitchenSelect" multiple size="3" title="Mehrfachauswahl mit STRG/CMD">
-    </select>
-    <button type="button" id="toggleGridBtn">Raster anzeigen</button>
-    <button type="button" id="scaleModeBtn">Skaliermodus umschalten</button>
-    <button type="button" id="groupBtn">Gruppieren</button>
-    <button type="button" id="ungroupBtn">Gruppe lösen</button>
-    <button type="button" id="deleteKitchenBtn">Küche löschen</button>
-    <button type="button" id="downloadBtn">Bild speichern</button>
+  <div id="container">
+    <img id="terrasse" alt="Terrasse">
+    <img id="kueche" alt="Küche">
   </div>
 
-  <!-- Canvas + Preview -->
-  <div id="konva-container"></div>
-  <div id="preview"></div>
+  <!-- Slider für Größenanpassung -->
+  <div style="margin-top:20px; display:none;" id="sizeControl">
+    <label for="sizeSlider">Küchengröße:</label>
+    <input type="range" id="sizeSlider" min="10" max="200" value="100">
+  </div>
 
-  <script src="https://unpkg.com/konva@9/konva.min.js"></script>
-  <script>
-    // --- Globale State-Variablen ---
-    let stage, bgLayer, gridLayer, layer, transformer, terrasseImg;
-    let kitchens = []; // {id, baseCanvas, viewCanvas, imageNode, handles[], group?}
-    let currentGroup = null;
-    let scaleMode = null;
-    let gridVisible = false;
+  <br><br>
+  <button id="downloadBtn" style="display:none">Bild speichern</button>
 
-    // --- Stage initialisieren ---
-    function initStage(width, height) {
-      document.getElementById('konva-container').innerHTML = '';
-      stage = new Konva.Stage({ container: 'konva-container', width, height });
+<script>
+const kuecheImg = document.getElementById("kueche");
+const sizeSlider = document.getElementById("sizeSlider");
+const sizeControl = document.getElementById("sizeControl");
 
-      // Ebenen: Hintergrund (Terrasse) → Raster → Küchen (Bilder/Handles/Transformer)
-      bgLayer = new Konva.Layer();
-      stage.add(bgLayer);
+sizeSlider.addEventListener("input", () => {
+  const scale = sizeSlider.value / 100;
+  kuecheImg.style.transform = `scale(${scale})`;
+  kuecheImg.style.transformOrigin = "top left";
+});
 
-      gridLayer = new Konva.Layer();
-      stage.add(gridLayer);
+// Funktion, um Küche einzublenden und Slider zu aktivieren
+function showKueche() {
+  kuecheImg.style.display = "block";
+  sizeControl.style.display = "block";
+  sizeSlider.value = 100;
+  kuecheImg.style.transform = "scale(1)";
+}
 
-      layer = new Konva.Layer();
-      stage.add(layer);
+// Beispiel: hier müsste dein bestehender Code die Küche einblenden.
+// Also überall dort, wo du bisher `kuecheImg.src = ...; kuecheImg.style.display="block";` machst,
+// einfach stattdessen `kuecheImg.src = ...; showKueche();`
 
-      transformer = new Konva.Transformer({
-        rotateEnabled: true,
-        enabledAnchors: ['top-left','top-right','bottom-left','bottom-right'],
-        ignoreStroke: true,
-        keepRatio: true
-      });
-      layer.add(transformer);
-
-      kitchens = [];
-      currentGroup = null;
-      updateDropdown();
-      if (gridVisible) { drawGrid(); } else { gridLayer.destroyChildren(); gridLayer.draw(); }
-    }
-
-    // --- Terrasse laden & skaliert darstellen ---
-    document.getElementById('terrasseInput').addEventListener('change', (e) => {
-      const file = e.target.files?.[0]; if (!file) return;
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        const img = new Image();
-        img.onload = () => {
-          const maxW = Math.min(window.innerWidth * 0.95, 1200);
-          const scale = img.width > maxW ? maxW / img.width : 1;
-          initStage(Math.round(img.width * scale), Math.round(img.height * scale));
-          terrasseImg = new Konva.Image({
-            image: img, x: 0, y: 0, width: img.width*scale, height: img.height*scale
-          });
-          bgLayer.add(terrasseImg);
-          bgLayer.draw();
-          if (gridVisible) { drawGrid(); } // neu zeichnen passend zur neuen Größe
-        };
-        img.src = ev.target.result;
-      };
-      reader.readAsDataURL(file);
-    });
-
-    // --- Galerie laden (unterstützt Array oder { kitchens: [...] }) ---
-    fetch(window.location.origin + '/static/kitchens.json')
-      .then(r => r.json())
-      .then(items => {
-        const list = Array.isArray(items) ? items : (Array.isArray(items.kitchens) ? items.kitchens : []);
-        const g = document.getElementById('gallery');
-        g.innerHTML = '';
-        list.forEach(item => {
-          // item kann string (Bildpfad) oder Objekt mit {image,name,description} sein
-          const imgSrc = typeof item === 'string' ? item : item.image;
-          const name = typeof item === 'object' && item.name ? item.name : 'Küche';
-          const desc = typeof item === 'object' && item.description ? item.description : '';
-
-          const card = document.createElement('div');
-          card.className = 'card';
-          card.innerHTML = `
-            <img src="${imgSrc}" alt="${name}">
-            <h4>${name}</h4>
-            <p>${desc}</p>
-            <button>Hinzufügen</button>
-          `;
-          card.querySelector('button').addEventListener('click', () => addKitchen(imgSrc));
-          g.appendChild(card);
-        });
-      })
-      .catch(err => console.error('Fehler beim Laden der Galerie:', err));
-
-    // --- Warping Math ---
-    function mapTriangle(ctx, s0,s1,s2, d0,d1,d2) {
-      const denom = (s0[0]*(s1[1]-s2[1]) + s1[0]*(s2[1]-s0[1]) + s2[0]*(s0[1]-s1[1]));
-      if (denom === 0) return;
-      const a = (d0[0]*(s1[1]-s2[1]) + d1[0]*(s2[1]-s0[1]) + d2[0]*(s0[1]-s1[1]))/denom;
-      const b = (d0[1]*(s1[1]-s2[1]) + d1[1]*(s2[1]-s0[1]) + d2[1]*(s0[1]-s1[1]))/denom;
-      const c = (d0[0]*(s2[0]-s1[0]) + d1[0]*(s0[0]-s2[0]) + d2[0]*(s1[0]-s0[0]))/denom;
-      const d = (d0[1]*(s2[0]-s1[0]) + d1[1]*(s0[0]-s2[0]) + d2[1]*(s1[0]-s0[0]))/denom;
-      const e = (d0[0]*(s1[0]*s2[1]-s2[0]*s1[1]) + d1[0]*(s2[0]*s0[1]-s0[0]*s2[1]) + d2[0]*(s0[0]*s1[1]-s1[0]*s0[1]))/denom;
-      const f = (d0[1]*(s1[0]*s2[1]-s2[0]*s1[1]) + d1[1]*(s2[0]*s0[1]-s0[0]*s2[1]) + d2[1]*(s0[0]*s1[1]-s1[0]*s0[1]))/denom;
-      ctx.transform(a,b,c,d,e,f);
-    }
-
-    function warpToCanvas(baseCanvas, viewCanvas, dstPts) {
-      const ctx = viewCanvas.getContext('2d');
-      ctx.clearRect(0,0,viewCanvas.width, viewCanvas.height);
-      const w = baseCanvas.width, h = baseCanvas.height;
-      const s = [[0,0],[w,0],[w,h],[0,h]];
-      const d = dstPts;
-      function drawTri(s0,s1,s2, d0,d1,d2) {
-        ctx.save();
-        ctx.beginPath();
-        ctx.moveTo(d0[0], d0[1]); ctx.lineTo(d1[0], d1[1]); ctx.lineTo(d2[0], d2[1]); ctx.closePath();
-        ctx.clip();
-        mapTriangle(ctx, s0,s1,s2, d0,d1,d2);
-        ctx.drawImage(baseCanvas, 0, 0);
-        ctx.restore();
-      }
-      drawTri(s[0],s[1],s[2], d[0],d[1],d[2]);
-      drawTri(s[0],s[2],s[3], d[0],d[2],d[3]);
-    }
-
-    // --- Küche hinzufügen (mit 4-Ecken-Verzerrung & Drag) ---
-    function addKitchen(url) {
-      const img = new Image();
-      if (!url.startsWith("data:")) { img.crossOrigin = "anonymous"; }
-      img.onload = () => {
-        const targetW = 300, targetH = (img.height/img.width)*300;
-
-        // Basis & View-Canvas
-        const baseCanvas = document.createElement('canvas');
-        baseCanvas.width = targetW; baseCanvas.height = targetH;
-        baseCanvas.getContext('2d').drawImage(img,0,0,targetW,targetH);
-
-        const viewCanvas = document.createElement('canvas');
-        viewCanvas.width = targetW; viewCanvas.height = targetH;
-
-        // Startposition
-        const startX=100, startY=100;
-
-        // 4 rote Handles
-        const handles=[
-          new Konva.Circle({x:startX,y:startY,radius:7,fill:'red',draggable:true}),
-          new Konva.Circle({x:startX+targetW,y:startY,radius:7,fill:'red',draggable:true}),
-          new Konva.Circle({x:startX+targetW,y:startY+targetH,radius:7,fill:'red',draggable:true}),
-          new Konva.Circle({x:startX,y:startY+targetH,radius:7,fill:'red',draggable:true})
-        ];
-        handles.forEach(h=>layer.add(h));
-
-        // Anzeige-Knoten
-        const imageNode = new Konva.Image({
-          image:viewCanvas,x:startX,y:startY,width:viewCanvas.width,height:viewCanvas.height,draggable:true
-        });
-        layer.add(imageNode);
-
-        // Warp-Update
-        function updateWarp() {
-          const pts = handles.map(h=>[h.x(),h.y()]);
-          const xs=pts.map(p=>p[0]), ys=pts.map(p=>p[1]);
-          const minX=Math.min(...xs), minY=Math.min(...ys);
-          const maxX=Math.max(...xs), maxY=Math.max(...ys);
-          const bw=Math.max(1,Math.ceil(maxX-minX));
-          const bh=Math.max(1,Math.ceil(maxY-minY));
-          if(viewCanvas.width!==bw||viewCanvas.height!==bh){viewCanvas.width=bw;viewCanvas.height=bh;imageNode.width(bw);imageNode.height(bh);}
-          const dstRel=pts.map(p=>[p[0]-minX,p[1]-minY]);
-          imageNode.position({x:minX,y:minY});
-          warpToCanvas(baseCanvas,viewCanvas,dstRel);
-          layer.batchDraw();
-        }
-        updateWarp();
-
-        // Handle-Drag → Warp
-        handles.forEach(h=>h.on('dragmove',updateWarp));
-
-        // Bild-Drag → Handles mitbewegen
-        let lastPos={x:imageNode.x(),y:imageNode.y()};
-        imageNode.on('dragstart',()=>{lastPos={x:imageNode.x(),y:imageNode.y()};});
-        imageNode.on('dragmove',()=>{
-          const dx=imageNode.x()-lastPos.x; const dy=imageNode.y()-lastPos.y;
-          lastPos={x:imageNode.x(),y:imageNode.y()};
-          handles.forEach(h=>{h.x(h.x()+dx);h.y(h.y()+dy);});
-          updateWarp();
-        });
-
-        const id='Küche '+(kitchens.length+1);
-        kitchens.push({id,baseCanvas,viewCanvas,imageNode,handles,group:null});
-        updateDropdown(); layer.draw();
-      };
-      img.src=url;
-    }
-
-    // --- Dropdown pflegen ---
-    function updateDropdown() {
-      const sel=document.getElementById('kitchenSelect'); sel.innerHTML='';
-      kitchens.forEach((k,i)=>{
-        const opt=document.createElement('option');
-        opt.value=i; opt.textContent=k.id+(k.group?' (Gruppe)':''); sel.appendChild(opt);
-      });
-    }
-
-    // --- Skaliermodus: Transformer für 1 ausgewählte Küche, Handles ausblenden ---
-    document.getElementById('scaleModeBtn').addEventListener('click', () => {
-      const sel = document.getElementById('kitchenSelect');
-      if (!sel.selectedOptions.length) { alert("Bitte zuerst eine Küche auswählen."); return; }
-      const idx = parseInt(sel.selectedOptions[0].value);
-      const k = kitchens[idx];
-
-      if (scaleMode === k) {
-        transformer.nodes([]);
-        k.handles.forEach(h => h.show());
-        scaleMode = null;
-      } else {
-        kitchens.forEach(kk => kk.handles.forEach(h => h.show()));
-        transformer.nodes([]);
-        k.handles.forEach(h => h.hide());
-        transformer.nodes([k.imageNode]);
-        transformer.moveToTop();
-        scaleMode = k;
-      }
-      layer.draw();
-    });
-
-    // --- Küche löschen ---
-    document.getElementById("deleteKitchenBtn").addEventListener("click", () => {
-      const sel = document.getElementById("kitchenSelect");
-      if (!sel.selectedOptions.length) { alert("Bitte zuerst eine Küche auswählen."); return; }
-      const idx = parseInt(sel.selectedOptions[0].value);
-      const k = kitchens[idx];
-      k.imageNode.destroy();
-      k.handles.forEach(h => h.destroy());
-      kitchens.splice(idx, 1);
-      transformer.nodes([]);
-      layer.draw();
-      updateDropdown();
-    });
-
-    // --- Raster ---
-    function drawGrid() {
-      gridLayer.destroyChildren();
-      if (!gridVisible) { gridLayer.draw(); return; }
-
-      const spacing = 50;
-      const w = stage.width();
-      const h = stage.height();
-
-      for (let x = 0; x <= w; x += spacing) {
-        gridLayer.add(new Konva.Line({ points:[x,0,x,h], stroke:'#ddd', strokeWidth:1 }));
-      }
-      for (let y = 0; y <= h; y += spacing) {
-        gridLayer.add(new Konva.Line({ points:[0,y,w,y], stroke:'#ddd', strokeWidth:1 }));
-      }
-      gridLayer.draw();
-    }
-
-    document.getElementById("toggleGridBtn").addEventListener("click", () => {
-      gridVisible = !gridVisible;
-      drawGrid(); // neu zeichnen / leeren
-    });
-
-    // --- Gruppieren ---
-    document.getElementById("groupBtn").addEventListener("click", () => {
-      const sel = document.getElementById("kitchenSelect");
-      const indices = Array.from(sel.selectedOptions).map(opt => parseInt(opt.value));
-      if (indices.length < 2) { alert("Bitte mindestens zwei Küchen auswählen."); return; }
-
-      const group = new Konva.Group({ draggable: true });
-      layer.add(group);
-
-      indices.forEach(i => {
-        const k = kitchens[i];
-        // Handles verstecken, nur Bild gruppieren
-        k.handles.forEach(h => h.hide());
-        group.add(k.imageNode);
-      });
-
-      transformer.nodes([group]);
-      currentGroup = group;
-      layer.draw();
-    });
-
-    // --- Gruppe lösen ---
-    document.getElementById("ungroupBtn").addEventListener("click", () => {
-      if (!currentGroup) { alert("Keine Gruppe ausgewählt."); return; }
-      const children = currentGroup.getChildren();
-      children.each(node => { layer.add(node); });
-      currentGroup.destroy();
-      currentGroup = null;
-      transformer.nodes([]);
-      // Nach dem Lösen alle Handles wieder zeigen
-      kitchens.forEach(k => k.handles.forEach(h=>h.show()));
-      layer.draw();
-    });
-
-    // --- Eigene Küche hochladen & freistellen (Replicate) ---
-    document.getElementById("kitchenUpload").addEventListener("change", async (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-
-      const formData = new FormData();
-      formData.append("image", file);
-
-      const preview = document.getElementById("preview");
-      preview.innerHTML = "<p>⏳ Küche wird freigestellt, bitte warten...</p>";
-
-      try {
-        const res = await fetch("/upload-kitchen", { method: "POST", body: formData });
-        const data = await res.json();
-        preview.innerHTML = "";
-
-        console.log("Antwort vom Server:", data);
-
-        if (data.url) {
-          addKitchen(data.url);
-        } else if (data.base64) {
-          addKitchen("data:image/png;base64," + data.base64);
-        } else if (data.error) {
-          alert("Fehler: " + data.error + (data.details ? ("\n" + data.details) : ""));
-        } else {
-          alert("Unbekannte Antwort vom Server.");
-        }
-      } catch (err) {
-        console.error("Fetch-Fehler:", err);
-        preview.innerHTML = "";
-        alert("Fehler beim Upload: " + err.message);
-      }
-    });
-
-
-    // --- Bild speichern (Download) ---
-    document.getElementById("downloadBtn").addEventListener("click", () => {
-      // Hinweis: Das lädt die Stage als PNG, unabhängig vom Raster-Status.
-      const dataURL = stage.toDataURL({ pixelRatio: 2 });
-      const a = document.createElement('a');
-      a.href = dataURL;
-      a.download = 'outdoor-kueche.png';
-      a.click();
-    });
-
-    // --- Initial: leere Stage ---
-    initStage(800, 500);
-  </script>
+</script>
 </body>
 </html>
