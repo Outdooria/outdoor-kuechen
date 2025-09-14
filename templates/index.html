@@ -246,15 +246,18 @@
       gridVisible=!gridVisible; drawGrid();
     });
 
-    // Download (Handles & Transformer ausblenden)
+    // Download (Handles, Transformer und Raster ausblenden)
     document.getElementById("downloadBtn").addEventListener("click", () => {
       kitchens.forEach(k => k.handles.forEach(h => h.hide()));
       transformer.hide();
+      const wasGridVisible = gridVisible;
+      if (gridVisible) { gridLayer.hide(); }
 
       const dataURL=stage.toDataURL({pixelRatio:2});
 
       kitchens.forEach(k => k.handles.forEach(h => h.show()));
       transformer.show();
+      if (wasGridVisible) { gridLayer.show(); }
 
       const a=document.createElement('a'); 
       a.href=dataURL; 
