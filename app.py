@@ -15,7 +15,7 @@ def upload_kitchen():
         file = request.files["image"]
         image_stream = BytesIO(file.read())
 
-        # Hintergrund entfernen mit bria/remove-background
+        # Hintergrund entfernen mit bria/remove-background (deine Version-ID)
         output = replicate.run(
             "bria/remove-background:k2n7712895rm80cr1zxb6bkm20",
             input={"image": image_stream}
