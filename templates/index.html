@@ -47,6 +47,17 @@
       <span id="sizeValue">800</span> px
     </label><br>
     <input type="range" id="sizeSlider" min="400" max="1200" step="50" value="800">
+
+    <!-- Vorschau -->
+    <div id="sizePreview" style="margin-top:8px;">
+      <div id="sizeBox" style="
+        display:inline-block; 
+        background:#ccc; 
+        border:1px solid #999; 
+        height:40px; 
+        width:800px;
+      "></div>
+    </div>
   </div>
 
   <!-- Galerie -->
@@ -90,6 +101,7 @@
     document.getElementById("sizeSlider").addEventListener("input", (e) => {
       defaultKitchenWidth = parseInt(e.target.value);
       document.getElementById("sizeValue").textContent = defaultKitchenWidth;
+      document.getElementById("sizeBox").style.width = defaultKitchenWidth + "px";
     });
 
     // Terrasse laden
@@ -147,7 +159,6 @@
       const ctx = viewCanvas.getContext('2d');
       ctx.clearRect(0,0,viewCanvas.width, viewCanvas.height);
       const w = baseCanvas.width, h = baseCanvas.height;
-
       const s = [[0,0],[w,0],[w,h],[0,h]];
       const d = dstPts;
       function drawTri(s0,s1,s2,d0,d1,d2){
