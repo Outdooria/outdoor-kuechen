@@ -146,11 +146,11 @@
       drawTri(s[0],s[2],s[3], d[0],d[2],d[3]);
     }
 
-    // Küche hinzufügen
+    // Küche hinzufügen (jetzt 800px breit)
     function addKitchen(url, name="Küche") {
       const img = new Image();
       img.onload = () => {
-        const targetW = 600, targetH = (img.height/img.width)*600;
+        const targetW = 800, targetH = (img.height/img.width)*800;  // << größer gemacht
         const baseCanvas = document.createElement('canvas');
         baseCanvas.width = targetW; baseCanvas.height = targetH;
         baseCanvas.getContext('2d').drawImage(img,0,0,targetW,targetH);
@@ -253,4 +253,3 @@
   </script>
 </body>
 </html>
-
