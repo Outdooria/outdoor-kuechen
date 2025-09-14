@@ -49,10 +49,9 @@
 
   <!-- Controls -->
   <div id="controls">
-    <select id="kitchenSelect" multiple size="3" title="Mehrfachauswahl mit STRG/CMD">
-    </select>
+    <select id="kitchenSelect" multiple size="3"></select>
     <button type="button" id="toggleGridBtn">Raster anzeigen</button>
-    <button type="button" id="scaleModeBtn">Skaliermodus umschalten</button>
+    <button type="button" id="scaleModeBtn">Skaliermodus</button>
     <button type="button" id="groupBtn">Gruppieren</button>
     <button type="button" id="ungroupBtn">Gruppe lösen</button>
     <button type="button" id="deleteKitchenBtn">Küche löschen</button>
@@ -65,91 +64,80 @@
 
   <script src="https://unpkg.com/konva@9/konva.min.js"></script>
   <script>
-    // --- Globale State-Variablen ---
     let stage, bgLayer, gridLayer, layer, transformer, terrasseImg;
     let kitchens = [];
-    let currentGroup = null;
-    let scaleMode = null;
     let gridVisible = false;
 
-    // --- Stage initialisieren ---
     function initStage(width, height) {
+      console.log("Init Stage:", width, height);
       document.getElementById('konva-container').innerHTML = '';
       stage = new Konva.Stage({ container: 'konva-container', width, height });
       bgLayer = new Konva.Layer(); stage.add(bgLayer);
       gridLayer = new Konva.Layer(); stage.add(gridLayer);
       layer = new Konva.Layer(); stage.add(layer);
-
-      transformer = new Konva.Transformer({
-        rotateEnabled: true,
-        enabledAnchors: ['top-left','top-right','bottom-left','bottom-right'],
-        ignoreStroke: true,
-        keepRatio: true
-      });
+      transformer = new Konva.Transformer({ rotateEnabled: true, keepRatio: true });
       layer.add(transformer);
-
-      kitchens = [];
-      currentGroup = null;
-      updateDropdown();
-      if (gridVisible) { drawGrid(); } else { gridLayer.destroyChildren(); gridLayer.draw(); }
     }
 
-    // --- Terrasse laden ---
+    // Terrasse laden
     document.getElementById('terrasseInput').addEventListener('change', (e) => {
       const file = e.target.files?.[0]; if (!file) return;
+      console.log("Terrassenfoto gewählt:", file.name);
       const reader = new FileReader();
       reader.onload = (ev) => {
         const img = new Image();
         img.onload = () => {
-          const maxW = Math.min(window.innerWidth * 0.95, 1200);
-          const scale = img.width > maxW ? maxW / img.width : 1;
-          initStage(Math.round(img.width * scale), Math.round(img.height * scale));
-          terrasseImg = new Konva.Image({
-            image: img, x: 0, y: 0, width: img.width*scale, height: img.height*scale
-          });
-          bgLayer.add(terrasseImg); bgLayer.draw();
-          if (gridVisible) { drawGrid(); }
+          console.log("Terrassenbild geladen:", img.width, "x", img.height);
+          const scale = img.width > 1200 ? 1200 / img.width : 1;
+          initStage(img.width * scale, img.height * scale);
+          terrasseImg = new Konva.Image({ image: img, x:0, y:0, width: img.width*scale, height: img.height*scale });
+          bgLayer.add(terrasseImg);
+          bgLayer.draw();
         };
         img.src = ev.target.result;
       };
       reader.readAsDataURL(file);
     });
 
-    // --- Galerie laden ---
-    fetch(window.location.origin + '/static/kitchens.json')
-      .then(r => r.json())
-      .then(items => {
-        const list = Array.isArray(items) ? items : (Array.isArray(items.kitchens) ? items.kitchens : []);
-        const g = document.getElementById('gallery'); g.innerHTML = '';
-        list.forEach(item => {
-          const imgSrc = typeof item === 'string' ? item : item.image;
-          const name = typeof item === 'object' && item.name ? item.name : 'Küche';
-          const desc = typeof item === 'object' && item.description ? item.description : '';
-          const card = document.createElement('div');
-          card.className = 'card';
-          card.innerHTML = `
-            <img src="${imgSrc}" alt="${name}">
-            <h4>${name}</h4>
-            <p>${desc}</p>
-            <button>Hinzufügen</button>
-          `;
-          card.querySelector('button').addEventListener('click', () => addKitchen(imgSrc));
-          g.appendChild(card);
-        });
-      })
-      .catch(err => console.error('Fehler beim Laden der Galerie:', err));
+    // Warping-Helfer
+    function mapTriangle(ctx, s0,s1,s2, d0,d1,d2) {
+      const denom = (s0[0]*(s1[1]-s2[1]) + s1[0]*(s2[1]-s0[1]) + s2[0]*(s0[1]-s1[1]));
+      if (denom === 0) return;
+      const a = (d0[0]*(s1[1]-s2[1]) + d1[0]*(s2[1]-s0[1]) + d2[0]*(s0[1]-s1[1]))/denom;
+      const b = (d0[1]*(s1[1]-s2[1]) + d1[1]*(s2[1]-s0[1]) + d2[1]*(s0[1]-s1[1]))/denom;
+      const c = (d0[0]*(s2[0]-s1[0]) + d1[0]*(s0[0]-s2[0]) + d2[0]*(s1[0]-s0[0]))/denom;
+      const d = (d0[1]*(s2[0]-s1[0]) + d1[1]*(s0[0]-s2[0]) + d2[1]*(s1[0]-s0[0]))/denom;
+      const e = (d0[0]*(s1[0]*s2[1]-s2[0]*s1[1]) + d1[0]*(s2[0]*s0[1]-s0[0]*s2[1]) + d2[0]*(s0[0]*s1[1]-s1[0]*s0[1]))/denom;
+      const f = (d0[1]*(s1[0]*s2[1]-s2[0]*s1[1]) + d1[1]*(s2[0]*s0[1]-s0[0]*s2[1]) + d2[1]*(s0[0]*s1[1]-s1[0]*s0[1]))/denom;
+      ctx.transform(a,b,c,d,e,f);
+    }
 
-    // --- Warping Math (gleich geblieben) ---
-    function mapTriangle(ctx, s0,s1,s2, d0,d1,d2) { /* ... unverändert ... */ }
-    function warpToCanvas(baseCanvas, viewCanvas, dstPts) { /* ... unverändert ... */ }
+    function warpToCanvas(baseCanvas, viewCanvas, dstPts) {
+      const ctx = viewCanvas.getContext('2d');
+      ctx.clearRect(0,0,viewCanvas.width, viewCanvas.height);
+      const w = baseCanvas.width, h = baseCanvas.height;
+      const s = [[0,0],[w,0],[w,h],[0,h]];
+      const d = dstPts;
+      function drawTri(s0,s1,s2,d0,d1,d2){
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(d0[0], d0[1]); ctx.lineTo(d1[0], d1[1]); ctx.lineTo(d2[0], d2[1]); ctx.closePath();
+        ctx.clip();
+        mapTriangle(ctx,s0,s1,s2,d0,d1,d2);
+        ctx.drawImage(baseCanvas,0,0);
+        ctx.restore();
+      }
+      drawTri(s[0],s[1],s[2], d[0],d[1],d[2]);
+      drawTri(s[0],s[2],s[3], d[0],d[2],d[3]);
+    }
 
-    // --- Küche hinzufügen (jetzt größer: 600px Breite) ---
+    // Küche hinzufügen
     function addKitchen(url) {
+      console.log("addKitchen mit URL:", url);
       const img = new Image();
-      if (!url.startsWith("data:")) { img.crossOrigin = "anonymous"; }
       img.onload = () => {
+        console.log("Küchenbild geladen:", img.width, "x", img.height);
         const targetW = 600, targetH = (img.height/img.width)*600;
-
         const baseCanvas = document.createElement('canvas');
         baseCanvas.width = targetW; baseCanvas.height = targetH;
         baseCanvas.getContext('2d').drawImage(img,0,0,targetW,targetH);
@@ -166,30 +154,39 @@
         ];
         handles.forEach(h=>layer.add(h));
 
-        const imageNode = new Konva.Image({
-          image:viewCanvas,x:startX,y:startY,width:viewCanvas.width,height:viewCanvas.height,draggable:true
-        });
+        const imageNode = new Konva.Image({image:viewCanvas,x:startX,y:startY,width:viewCanvas.width,height:viewCanvas.height,draggable:true});
         layer.add(imageNode);
 
-        function updateWarp() { /* ... unverändert ... */ }
+        function updateWarp() {
+          const pts=handles.map(h=>[h.x(),h.y()]);
+          const xs=pts.map(p=>p[0]), ys=pts.map(p=>p[1]);
+          const minX=Math.min(...xs), minY=Math.min(...ys);
+          const maxX=Math.max(...xs), maxY=Math.max(...ys);
+          const bw=Math.max(1,Math.ceil(maxX-minX));
+          const bh=Math.max(1,Math.ceil(maxY-minY));
+          if(viewCanvas.width!==bw||viewCanvas.height!==bh){
+            viewCanvas.width=bw; viewCanvas.height=bh; imageNode.width(bw); imageNode.height(bh);
+          }
+          const dstRel=pts.map(p=>[p[0]-minX,p[1]-minY]);
+          imageNode.position({x:minX,y:minY});
+          warpToCanvas(baseCanvas,viewCanvas,dstRel);
+          layer.batchDraw();
+          console.log("Warp aktualisiert für Küche.");
+        }
         updateWarp();
 
         handles.forEach(h=>h.on('dragmove',updateWarp));
-        let lastPos={x:imageNode.x(),y:imageNode.y()};
-        imageNode.on('dragstart',()=>{lastPos={x:imageNode.x(),y:imageNode.y()};});
-        imageNode.on('dragmove',()=>{ /* ... unverändert ... */ });
-
-        const id='Küche '+(kitchens.length+1);
-        kitchens.push({id,baseCanvas,viewCanvas,imageNode,handles,group:null});
-        updateDropdown(); layer.draw();
+        console.log("Küche erfolgreich hinzugefügt.");
       };
       img.src=url;
     }
 
-    // --- Restlicher Code bleibt wie in deiner stabilen Version ---
-    // updateDropdown, scaleModeBtn, deleteKitchenBtn, grid, group/ungroup, upload, download...
+    // Testbutton für Debug: Küche hinzufügen (falls kein Backend)
+    window.addEventListener("keydown", (e)=>{
+      if(e.key==="k"){ addKitchen("https://via.placeholder.com/800x400.png?text=Küche"); }
+    });
 
-    initStage(800, 500);
+    initStage(800,500);
   </script>
 </body>
 </html>
