@@ -1,73 +1,50 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-  <meta charset="utf-8" />
-  <title>Outdoor-Küche Vorschau</title>
+  <meta charset="UTF-8">
+  <title>Outdoor Küchen Konfigurator</title>
+  <script src="https://unpkg.com/konva@9/konva.min.js"></script>
   <style>
-    body { font-family: system-ui, sans-serif; margin: 0; padding: 16px; text-align: center; }
-    #konva-container { border: 1px solid #ccc; margin: 16px auto; display: inline-block; max-width: 95vw; }
-    .gallery { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; margin: 16px 0; }
-    .card { width: 200px; border: 1px solid #ddd; border-radius: 10px; padding: 10px; }
-    .card img { width: 100%; height: auto; }
-    #controls { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin: 12px 0; }
-    button, select, input[type=file] { padding: 10px 14px; border-radius: 6px; border: none; color: #fff; background: #0077cc; cursor: pointer; }
-    #groupBtn { background:#6f42c1; } #ungroupBtn{background:#20c997;} #deleteKitchenBtn{background:#dc3545;}
-    #scaleModeBtn{background:#ff8800;} #toggleGridBtn{background:#17a2b8;}
-    #kitchenSelect{ background:#555; min-width: 200px; }
-    #preview img{ max-width:100%; border:1px solid #ccc; border-radius:6px; margin-top:10px; }
-    label { cursor: pointer; }
-    input[type=file] { background:#28a745; color:#fff; cursor:pointer; }
+    body { font-family: Arial, sans-serif; margin: 0; padding: 0; }
+    .toolbar {
+      display: flex; flex-wrap: wrap; gap: 10px;
+      padding: 10px; background: #f0f0f0; border-bottom: 1px solid #ccc;
+    }
+    #container { width: 100%; height: 80vh; border: 1px solid #ccc; }
+    select, input, button { padding: 5px; font-size: 14px; }
   </style>
 </head>
 <body>
-  <h2>Outdoor-Küche Vorschau</h2>
-
-  <!-- Terrasse -->
-  <div>
-    <label>Terrassenfoto hochladen:
-      <input type="file" id="terrasseInput" accept="image/*,.heic,.heif" />
-    </label>
-  </div>
-
-  <!-- Eigene Küche -->
-  <div>
-    <label>Eigene Küche hochladen:
-      <input type="file" id="kitchenUpload" accept="image/*" />
-    </label>
-  </div>
-
-  <!-- Galerie -->
-  <div class="gallery" id="gallery"></div>
-
-  <!-- Controls -->
-  <div id="controls">
-    <select id="kitchenSelect" multiple size="3"></select>
+  <div class="toolbar">
+    <label>Terrasse hochladen: <input type="file" id="terraceUpload"></label>
+    <label>Eigene Küche hochladen: <input type="file" id="kitchenUpload"></label>
+    <select id="kitchenSelect" multiple size="3" style="min-width:150px;"></select>
+    <button type="button" id="deleteKitchenBtn">Küche löschen</button>
     <button type="button" id="toggleGridBtn">Raster anzeigen</button>
-    <button type="button" id="scaleModeBtn">Skaliermodus umschalten</button>
     <button type="button" id="groupBtn">Gruppieren</button>
     <button type="button" id="ungroupBtn">Gruppe lösen</button>
-    <button type="button" id="deleteKitchenBtn">Küche löschen</button>
-    <button type="button" id="downloadBtn">Bild speichern</button>
+    <button type="button" id="scaleModeBtn">Skaliermodus</button>
   </div>
+  <div id="container"></div>
 
-  <!-- Canvas + Preview -->
-  <div id="konva-container"></div>
-  <div id="preview"></div>
-
-  <script src="https://unpkg.com/konva@9/konva.min.js"></script>
   <script>
-    let stage, layer, terrasseImg;
+    let stage, layer, transformer;
+    let gridLayer;
+    let gridVisible = false;
     let kitchens = [];
-    let transformer;
-    let scaleMode = null;
-    let gridLayer, gridVisible = false;
     let currentGroup = null;
+    let scaleMode = false;
 
+    // Stage initialisieren
     function initStage(width, height) {
-      document.getElementById('konva-container').innerHTML = '';
-      stage = new Konva.Stage({ container: 'konva-container', width, height });
-      
-      // Grid-Layer
+      if (stage) stage.destroy();
+      stage = new Konva.Stage({
+        container: 'container',
+        width: width,
+        height: height
+      });
+
+      // Raster-Layer
       gridLayer = new Konva.Layer();
       stage.add(gridLayer);
 
@@ -75,168 +52,114 @@
       layer = new Konva.Layer();
       stage.add(layer);
 
+      // Transformer
       transformer = new Konva.Transformer({
         rotateEnabled: true,
-        enabledAnchors: ['top-left','top-right','bottom-left','bottom-right'],
-        ignoreStroke: true,
-        keepRatio: true
+        enabledAnchors: ["top-left", "top-right", "bottom-left", "bottom-right"]
       });
       layer.add(transformer);
+    }
 
-      kitchens = [];
-      currentGroup = null;
-      updateDropdown();
+    // Raster zeichnen
+    function drawGrid() {
+      gridLayer.destroyChildren();
+      if (!gridVisible) return;
+
+      const spacing = 50;
+      const w = stage.width();
+      const h = stage.height();
+
+      for (let x = 0; x < w; x += spacing) {
+        gridLayer.add(new Konva.Line({
+          points: [x, 0, x, h],
+          stroke: '#ccc',
+          strokeWidth: 1
+        }));
+      }
+      for (let y = 0; y < h; y += spacing) {
+        gridLayer.add(new Konva.Line({
+          points: [0, y, w, y],
+          stroke: '#ccc',
+          strokeWidth: 1
+        }));
+      }
+      gridLayer.draw();
+    }
+
+    // Dropdown aktualisieren
+    function updateDropdown() {
+      const sel = document.getElementById("kitchenSelect");
+      sel.innerHTML = "";
+      kitchens.forEach((k, i) => {
+        const opt = document.createElement("option");
+        opt.value = i;
+        opt.textContent = "Küche " + (i + 1);
+        sel.appendChild(opt);
+      });
     }
 
     // Terrasse hochladen
-    document.getElementById('terrasseInput').addEventListener('change', (e) => {
-      const file = e.target.files?.[0]; if (!file) return;
+    document.getElementById("terraceUpload").addEventListener("change", e => {
+      const file = e.target.files[0];
+      if (!file) return;
       const reader = new FileReader();
-      reader.onload = (ev) => {
+      reader.onload = evt => {
         const img = new Image();
         img.onload = () => {
-          const maxW = Math.min(window.innerWidth * 0.95, 1200);
-          const scale = img.width > maxW ? maxW / img.width : 1;
-          initStage(img.width * scale, img.height * scale);
-          terrasseImg = new Konva.Image({
-            image: img, x: 0, y: 0, width: img.width*scale, height: img.height*scale
-          });
-          layer.add(terrasseImg); layer.draw();
+          initStage(img.width, img.height);
+          const terrace = new Konva.Image({ image: img, x: 0, y: 0, width: img.width, height: img.height });
+          stage.add(new Konva.Layer().add(terrace));
+          stage.draw();
         };
-        img.src = ev.target.result;
+        img.src = evt.target.result;
       };
       reader.readAsDataURL(file);
     });
 
     // Galerie laden
-    fetch(window.location.origin + '/static/kitchens.json')
+    fetch("/static/kitchens.json")
       .then(r => r.json())
-      .then(items => {
-        const g = document.getElementById('gallery');
-        g.innerHTML = '';
-        items.forEach(item => {
-          const card = document.createElement('div');
-          card.className = 'card';
-          card.innerHTML = `
-            <img src="${item.image}" alt="${item.name}">
-            <h4>${item.name}</h4>
-            <p>${item.description||''}</p>
-            <button>Hinzufügen</button>
-          `;
-          card.querySelector('button').addEventListener('click', () => addKitchen(item.image));
-          g.appendChild(card);
+      .then(data => {
+        const sel = document.getElementById("kitchenSelect");
+        data.kitchens.forEach((src, i) => {
+          const opt = document.createElement("option");
+          opt.value = i;
+          opt.textContent = "Küche " + (i + 1);
+          sel.appendChild(opt);
+          const img = new Image();
+          img.onload = () => {
+            kitchens.push({ imageNode: new Konva.Image({ image: img, x: 50 + i*30, y: 50 + i*30, width: 200, height: img.height * 200/img.width }), handles: [] });
+            layer.add(kitchens[kitchens.length-1].imageNode);
+            layer.draw();
+          };
+          img.src = src;
         });
       });
 
-    // Warping-Helfer
-    function mapTriangle(ctx, s0,s1,s2, d0,d1,d2) {
-      const denom = (s0[0]*(s1[1]-s2[1]) + s1[0]*(s2[1]-s0[1]) + s2[0]*(s0[1]-s1[1]));
-      if (denom === 0) return;
-      const a = (d0[0]*(s1[1]-s2[1]) + d1[0]*(s2[1]-s0[1]) + d2[0]*(s0[1]-s1[1]))/denom;
-      const b = (d0[1]*(s1[1]-s2[1]) + d1[1]*(s2[1]-s0[1]) + d2[1]*(s0[1]-s1[1]))/denom;
-      const c = (d0[0]*(s2[0]-s1[0]) + d1[0]*(s0[0]-s2[0]) + d2[0]*(s1[0]-s0[0]))/denom;
-      const d = (d0[1]*(s2[0]-s1[0]) + d1[1]*(s0[0]-s2[0]) + d2[1]*(s1[0]-s0[0]))/denom;
-      const e = (d0[0]*(s1[0]*s2[1]-s2[0]*s1[1]) + d1[0]*(s2[0]*s0[1]-s0[0]*s2[1]) + d2[0]*(s0[0]*s1[1]-s1[0]*s0[1]))/denom;
-      const f = (d0[1]*(s1[0]*s2[1]-s2[0]*s1[1]) + d1[1]*(s0[0]*s2[1]-s2[0]*s0[1]) + d2[1]*(s1[0]*s0[1]-s0[0]*s1[1]))/denom;
-      ctx.transform(a,b,c,d,e,f);
-    }
+    // Eigene Küche hochladen
+    document.getElementById("kitchenUpload").addEventListener("change", async e => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const formData = new FormData();
+      formData.append("image", file);
 
-    function warpToCanvas(baseCanvas, viewCanvas, dstPts) {
-      const ctx = viewCanvas.getContext('2d');
-      ctx.clearRect(0,0,viewCanvas.width, viewCanvas.height);
-      const w = baseCanvas.width, h = baseCanvas.height;
-      const s = [[0,0],[w,0],[w,h],[0,h]];
-      const d = dstPts;
-      function drawTri(s0,s1,s2, d0,d1,d2) {
-        ctx.save();
-        ctx.beginPath();
-        ctx.moveTo(d0[0], d0[1]); ctx.lineTo(d1[0], d1[1]); ctx.lineTo(d2[0], d2[1]); ctx.closePath();
-        ctx.clip();
-        mapTriangle(ctx, s0,s1,s2, d0,d1,d2);
-        ctx.drawImage(baseCanvas, 0, 0);
-        ctx.restore();
-      }
-      drawTri(s[0],s[1],s[2], d[0],d[1],d[2]);
-      drawTri(s[0],s[2],s[3], d[0],d[2],d[3]);
-    }
+      const res = await fetch("/upload-kitchen", { method: "POST", body: formData });
+      const data = await res.json();
 
-    // Küche hinzufügen
-    function addKitchen(url) {
-      const img = new Image();
-      if (!url.startsWith("data:")) { img.crossOrigin = "anonymous"; }
-      img.onload = () => {
-        const targetW = 300, targetH = (img.height/img.width)*300;
-        const baseCanvas = document.createElement('canvas');
-        baseCanvas.width = targetW; baseCanvas.height = targetH;
-        baseCanvas.getContext('2d').drawImage(img,0,0,targetW,targetH);
-        const viewCanvas = document.createElement('canvas');
-        viewCanvas.width = targetW; viewCanvas.height = targetH;
-
-        const startX=100, startY=100;
-        const handles=[
-          new Konva.Circle({x:startX,y:startY,radius:7,fill:'red',draggable:true}),
-          new Konva.Circle({x:startX+targetW,y:startY,radius:7,fill:'red',draggable:true}),
-          new Konva.Circle({x:startX+targetW,y:startY+targetH,radius:7,fill:'red',draggable:true}),
-          new Konva.Circle({x:startX,y:startY+targetH,radius:7,fill:'red',draggable:true})
-        ];
-        handles.forEach(h=>layer.add(h));
-
-        const imageNode = new Konva.Image({
-          image:viewCanvas,x:startX,y:startY,width:viewCanvas.width,height:viewCanvas.height,draggable:true
-        });
-        layer.add(imageNode);
-
-        function updateWarp() {
-          const pts = handles.map(h=>[h.x(),h.y()]);
-          const xs=pts.map(p=>p[0]), ys=pts.map(p=>p[1]);
-          const minX=Math.min(...xs), minY=Math.min(...ys);
-          const maxX=Math.max(...xs), maxY=Math.max(...ys);
-          const bw=Math.max(1,Math.ceil(maxX-minX));
-          const bh=Math.max(1,Math.ceil(maxY-minY));
-          if(viewCanvas.width!==bw||viewCanvas.height!==bh){viewCanvas.width=bw;viewCanvas.height=bh;imageNode.width(bw);imageNode.height(bh);}
-          const dstRel=pts.map(p=>[p[0]-minX,p[1]-minY]);
-          imageNode.position({x:minX,y:minY});
-          warpToCanvas(baseCanvas,viewCanvas,dstRel);
-          layer.batchDraw();
-        }
-        updateWarp();
-        handles.forEach(h=>h.on('dragmove',updateWarp));
-        let lastPos={x:imageNode.x(),y:imageNode.y()};
-        imageNode.on('dragstart',()=>{lastPos={x:imageNode.x(),y:imageNode.y()};});
-        imageNode.on('dragmove',()=>{const dx=imageNode.x()-lastPos.x;const dy=imageNode.y()-lastPos.y;lastPos={x:imageNode.x(),y:imageNode.y()};handles.forEach(h=>{h.x(h.x()+dx);h.y(h.y()+dy);});updateWarp();});
-
-        kitchens.push({id:'Küche '+(kitchens.length+1),baseCanvas,viewCanvas,imageNode,handles});
-        updateDropdown(); layer.draw();
-      };
-      img.src=url;
-    }
-
-    // Dropdown
-    function updateDropdown() {
-      const sel=document.getElementById('kitchenSelect'); sel.innerHTML='';
-      kitchens.forEach((k,i)=>{const opt=document.createElement('option');opt.value=i;opt.textContent=k.id;sel.appendChild(opt);});
-    }
-
-    // Skaliermodus
-    document.getElementById('scaleModeBtn').addEventListener('click', () => {
-      const sel = document.getElementById('kitchenSelect');
-      if (!sel.selectedOptions.length) { alert("Bitte zuerst eine Küche auswählen."); return; }
-      const idx = parseInt(sel.selectedOptions[0].value);
-      const k = kitchens[idx];
-
-      if (scaleMode === k) {
-        transformer.nodes([]);
-        k.handles.forEach(h => h.show());
-        scaleMode = null;
+      if (data.url) {
+        const img = new Image();
+        img.crossOrigin = "anonymous";
+        img.onload = () => {
+          const kitchen = { imageNode: new Konva.Image({ image: img, x: 100, y: 100, width: 200, height: img.height * 200/img.width }), handles: [] };
+          kitchens.push(kitchen);
+          layer.add(kitchen.imageNode);
+          updateDropdown();
+          layer.draw();
+        };
+        img.src = data.url;
       } else {
-        kitchens.forEach(kk => kk.handles.forEach(h => h.show()));
-        transformer.nodes([]);
-        k.handles.forEach(h => h.hide());
-        transformer.nodes([k.imageNode]);
-        transformer.moveToTop();
-        scaleMode = k;
+        alert("Fehler beim Freistellen: " + (data.error || "Unbekannt"));
       }
-      layer.draw();
     });
 
     // Küche löschen
@@ -246,38 +169,19 @@
         alert("Bitte zuerst eine Küche auswählen.");
         return;
       }
-
       const idx = parseInt(sel.selectedOptions[0].value);
       const k = kitchens[idx];
-
       k.imageNode.destroy();
-      k.handles.forEach(h => h.destroy());
       kitchens.splice(idx, 1);
-
       transformer.nodes([]);
       layer.draw();
       updateDropdown();
     });
 
-    // Raster ein-/ausblenden
-    function drawGrid() {
-      gridLayer.destroyChildren();
-      if (!gridVisible) return;
-      const spacing = 50;
-      const w = stage.width();
-      const h = stage.height();
-      for (let x = 0; x < w; x += spacing) {
-        gridLayer.add(new Konva.Line({ points:[x,0,x,h], stroke:'#ddd', strokeWidth:1 }));
-      }
-      for (let y = 0; y < h; y += spacing) {
-        gridLayer.add(new Konva.Line({ points:[0,y,w,y], stroke:'#ddd', strokeWidth:1 }));
-      }
-    }
-
+    // Raster anzeigen
     document.getElementById("toggleGridBtn").addEventListener("click", () => {
       gridVisible = !gridVisible;
       drawGrid();
-      gridLayer.draw();
     });
 
     // Gruppieren
@@ -288,16 +192,12 @@
         alert("Bitte mindestens zwei Küchen auswählen.");
         return;
       }
-
       const group = new Konva.Group({ draggable: true });
       layer.add(group);
-
       indices.forEach(i => {
         const k = kitchens[i];
-        k.handles.forEach(h => h.hide());
         group.add(k.imageNode);
       });
-
       transformer.nodes([group]);
       currentGroup = group;
       layer.draw();
@@ -309,49 +209,23 @@
         alert("Keine Gruppe ausgewählt.");
         return;
       }
-
       const children = currentGroup.getChildren();
-      children.each(node => {
-        layer.add(node);
-      });
-
+      children.each(node => { layer.add(node); });
       currentGroup.destroy();
       currentGroup = null;
       transformer.nodes([]);
       layer.draw();
     });
 
-    // Eigene Küche hochladen
-    document.getElementById("kitchenUpload").addEventListener("change", async (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-
-      const formData = new FormData();
-      formData.append("image", file);
-
-      try {
-        const preview = document.getElementById("preview");
-        preview.innerHTML = "<p>⏳ Küche wird freigestellt, bitte warten...</p>";
-
-        const res = await fetch("/upload-kitchen", { method: "POST", body: formData });
-        const data = await res.json();
-        console.log("Antwort vom Server:", data);
-        preview.innerHTML = "";
-
-        if (data.url) {
-          addKitchen(data.url);
-        } else if (data.base64) {
-          addKitchen("data:image/png;base64," + data.base64);
-        } else if (data.error) {
-          alert("Fehler: " + data.error + (data.details ? ("\n" + data.details) : ""));
-        } else {
-          alert("Unbekannte Antwort vom Server.");
-        }
-      } catch (err) {
-        console.error("Fetch-Fehler:", err);
-        alert("Fehler beim Upload: " + err.message);
-      }
+    // Skaliermodus
+    document.getElementById("scaleModeBtn").addEventListener("click", () => {
+      scaleMode = !scaleMode;
+      transformer.enabledAnchors(scaleMode ? ["top-left","top-right","bottom-left","bottom-right"] : []);
+      layer.draw();
     });
+
+    // Start-Stage
+    initStage(800, 600);
   </script>
 </body>
 </html>
