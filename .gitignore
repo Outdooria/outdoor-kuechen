@@ -1,0 +1,25 @@
+# Python-Cache
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+
+# Virtuelle Umgebungen
+.env
+.venv
+env/
+venv/
+
+# IDE/Editor Dateien
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Systemdateien
+.DS_Store
+Thumbs.db
+
+# Flask Uploads / Static Files
+static/uploads/
