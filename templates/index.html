@@ -66,28 +66,32 @@
   <script>
     let stage, bgLayer, gridLayer, layer, transformer, terrasseImg;
     let kitchens = [];
+    let currentGroup = null;
+    let scaleMode = null;
     let gridVisible = false;
 
     function initStage(width, height) {
-      console.log("Init Stage:", width, height);
       document.getElementById('konva-container').innerHTML = '';
       stage = new Konva.Stage({ container: 'konva-container', width, height });
       bgLayer = new Konva.Layer(); stage.add(bgLayer);
       gridLayer = new Konva.Layer(); stage.add(gridLayer);
       layer = new Konva.Layer(); stage.add(layer);
-      transformer = new Konva.Transformer({ rotateEnabled: true, keepRatio: true });
+      transformer = new Konva.Transformer({
+        rotateEnabled: true,
+        enabledAnchors: ['top-left','top-right','bottom-left','bottom-right'],
+        ignoreStroke: true,
+        keepRatio: true
+      });
       layer.add(transformer);
     }
 
     // Terrasse laden
     document.getElementById('terrasseInput').addEventListener('change', (e) => {
       const file = e.target.files?.[0]; if (!file) return;
-      console.log("Terrassenfoto gewählt:", file.name);
       const reader = new FileReader();
       reader.onload = (ev) => {
         const img = new Image();
         img.onload = () => {
-          console.log("Terrassenbild geladen:", img.width, "x", img.height);
           const scale = img.width > 1200 ? 1200 / img.width : 1;
           initStage(img.width * scale, img.height * scale);
           terrasseImg = new Konva.Image({ image: img, x:0, y:0, width: img.width*scale, height: img.height*scale });
@@ -98,6 +102,41 @@
       };
       reader.readAsDataURL(file);
     });
+
+    // Galerie laden
+    fetch('/static/kitchens.json')
+      .then(r => {
+        if (!r.ok) throw new Error("HTTP-Fehler " + r.status);
+        return r.json();
+      })
+      .then(items => {
+        const list = Array.isArray(items) ? items : (Array.isArray(items.kitchens) ? items.kitchens : []);
+        const g = document.getElementById('gallery');
+        g.innerHTML = '';
+        if (list.length === 0) {
+          g.innerHTML = "<p>⚠️ Keine Küchen gefunden.</p>";
+          return;
+        }
+        list.forEach(item => {
+          const imgSrc = item.image || "";
+          const name = item.name || "Küche";
+          const desc = item.description || "";
+          const card = document.createElement('div');
+          card.className = 'card';
+          card.innerHTML = `
+            <img src="${imgSrc}" alt="${name}">
+            <h4>${name}</h4>
+            <p>${desc}</p>
+            <button>Hinzufügen</button>
+          `;
+          card.querySelector('button').addEventListener('click', () => addKitchen(imgSrc));
+          g.appendChild(card);
+        });
+      })
+      .catch(err => {
+        const g = document.getElementById('gallery');
+        g.innerHTML = "<p>❌ Fehler beim Laden der Galerie.</p>";
+      });
 
     // Warping-Helfer
     function mapTriangle(ctx, s0,s1,s2, d0,d1,d2) {
@@ -133,15 +172,13 @@
 
     // Küche hinzufügen
     function addKitchen(url) {
-      console.log("addKitchen mit URL:", url);
       const img = new Image();
+      if (!url.startsWith("data:")) { img.crossOrigin = "anonymous"; }
       img.onload = () => {
-        console.log("Küchenbild geladen:", img.width, "x", img.height);
         const targetW = 600, targetH = (img.height/img.width)*600;
         const baseCanvas = document.createElement('canvas');
         baseCanvas.width = targetW; baseCanvas.height = targetH;
         baseCanvas.getContext('2d').drawImage(img,0,0,targetW,targetH);
-
         const viewCanvas = document.createElement('canvas');
         viewCanvas.width = targetW; viewCanvas.height = targetH;
 
@@ -153,7 +190,6 @@
           new Konva.Circle({x:startX,y:startY+targetH,radius:7,fill:'red',draggable:true})
         ];
         handles.forEach(h=>layer.add(h));
-
         const imageNode = new Konva.Image({image:viewCanvas,x:startX,y:startY,width:viewCanvas.width,height:viewCanvas.height,draggable:true});
         layer.add(imageNode);
 
@@ -171,20 +207,12 @@
           imageNode.position({x:minX,y:minY});
           warpToCanvas(baseCanvas,viewCanvas,dstRel);
           layer.batchDraw();
-          console.log("Warp aktualisiert für Küche.");
         }
         updateWarp();
-
         handles.forEach(h=>h.on('dragmove',updateWarp));
-        console.log("Küche erfolgreich hinzugefügt.");
       };
       img.src=url;
     }
-
-    // Testbutton für Debug: Küche hinzufügen (falls kein Backend)
-    window.addEventListener("keydown", (e)=>{
-      if(e.key==="k"){ addKitchen("https://via.placeholder.com/800x400.png?text=Küche"); }
-    });
 
     initStage(800,500);
   </script>
