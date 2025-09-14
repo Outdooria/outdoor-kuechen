@@ -15,7 +15,7 @@
     display:none;
   }
   .gallery{display:flex;gap:16px;justify-content:center;margin:20px 0;flex-wrap:wrap}
-  .card{width:200px;padding:12px;border-radius:10px;border:1px solid #ddd;text-align:center}
+  .card{width:200px;padding:12px;border-radius:10px;border:1px solid #ddd;text-align:center;cursor:pointer}
   .card.selected{border:2px solid #0077cc;box-shadow:0 0 10px rgba(0,119,204,0.2)}
   .card img{width:100%;height:auto}
   button{padding:8px 12px;border:none;border-radius:6px;background:#0077cc;color:#fff;cursor:pointer}
@@ -24,6 +24,8 @@
 </head>
 <body>
   <h2>Outdoor-Küche Vorschau</h2>
+
+  <!-- Upload-Formular -->
   <form id="uploadForm" enctype="multipart/form-data">
     <p>Terrassenfoto hochladen:</p>
     <input type="file" name="terrasse" accept="image/*" required><br><br>
@@ -31,13 +33,17 @@
     <input type="file" name="kueche" accept="image/*"><br><br>
     <button type="submit" class="small">Fotos verarbeiten</button>
   </form>
+
+  <!-- Galerie -->
   <div class="gallery" id="gallery"></div>
+
+  <!-- Bild-Container -->
   <div id="container">
     <img id="terrasse" alt="Terrasse">
     <img id="kueche" alt="Küche">
   </div>
 
-  <!-- Slider für Größenanpassung -->
+  <!-- Slider für Küchengröße -->
   <div style="margin-top:20px; display:none;" id="sizeControl">
     <label for="sizeSlider">Küchengröße:</label>
     <input type="range" id="sizeSlider" min="10" max="200" value="100">
@@ -47,17 +53,22 @@
   <button id="downloadBtn" style="display:none">Bild speichern</button>
 
 <script>
+const uploadForm = document.getElementById("uploadForm");
+const terrasseImg = document.getElementById("terrasse");
 const kuecheImg = document.getElementById("kueche");
+const gallery = document.getElementById("gallery");
+const downloadBtn = document.getElementById("downloadBtn");
 const sizeSlider = document.getElementById("sizeSlider");
 const sizeControl = document.getElementById("sizeControl");
 
+// Slider für Küchengröße
 sizeSlider.addEventListener("input", () => {
   const scale = sizeSlider.value / 100;
   kuecheImg.style.transform = `scale(${scale})`;
   kuecheImg.style.transformOrigin = "top left";
 });
 
-// Funktion, um Küche einzublenden und Slider zu aktivieren
+// Funktion Küche sichtbar machen
 function showKueche() {
   kuecheImg.style.display = "block";
   sizeControl.style.display = "block";
@@ -65,10 +76,59 @@ function showKueche() {
   kuecheImg.style.transform = "scale(1)";
 }
 
-// Beispiel: hier müsste dein bestehender Code die Küche einblenden.
-// Also überall dort, wo du bisher `kuecheImg.src = ...; kuecheImg.style.display="block";` machst,
-// einfach stattdessen `kuecheImg.src = ...; showKueche();`
+// Upload-Handling
+uploadForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const formData = new FormData(uploadForm);
 
+  try {
+    const res = await fetch("/upload", {
+      method: "POST",
+      body: formData
+    });
+    const data = await res.json();
+
+    if (data.error) {
+      alert("Fehler: " + data.error);
+      return;
+    }
+
+    // Terrasse anzeigen (immer vorhanden)
+    if (data.terrasse) {
+      terrasseImg.src = data.terrasse;
+    }
+
+    // Küche anzeigen + Galerie hinzufügen (nur wenn vorhanden)
+    if (data.kueche) {
+      kuecheImg.src = data.kueche;
+      showKueche();
+
+      const card = document.createElement("div");
+      card.className = "card";
+      const img = document.createElement("img");
+      img.src = data.kueche;
+      card.appendChild(img);
+      gallery.appendChild(card);
+
+      // Klick auf Galerie-Bild setzt Küche neu
+      img.addEventListener("click", () => {
+        kuecheImg.src = img.src;
+        showKueche();
+
+        // Markierung setzen
+        document.querySelectorAll(".card").forEach(c => c.classList.remove("selected"));
+        card.classList.add("selected");
+      });
+    }
+
+    // Download aktivieren
+    downloadBtn.style.display = "inline-block";
+
+  } catch (err) {
+    console.error(err);
+    alert("Upload fehlgeschlagen.");
+  }
+});
 </script>
 </body>
 </html>
