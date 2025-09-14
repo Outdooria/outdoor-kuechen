@@ -128,7 +128,7 @@
       const c = (d0[0]*(s2[0]-s1[0]) + d1[0]*(s0[0]-s2[0]) + d2[0]*(s1[0]-s0[0]))/denom;
       const d = (d0[1]*(s2[0]-s1[0]) + d1[1]*(s0[0]-s2[0]) + d2[1]*(s1[0]-s0[0]))/denom;
       const e = (d0[0]*(s1[0]*s2[1]-s2[0]*s1[1]) + d1[0]*(s2[0]*s0[1]-s0[0]*s2[1]) + d2[0]*(s0[0]*s1[1]-s1[0]*s0[1]))/denom;
-      const f = (d0[1]*(s1[0]*s2[1]-s2[0]*s1[1]) + d1[1]*(s2[0]*s0[1]-s0[0]*s2[1]) + d2[1]*(s0[0]*s1[1]-s1[0]*s0[1]))/denom;
+      const f = (d0[1]*(s1[0]*s2[1]-s2[0]*s1[1]) + d1[1]*(s0[0]*s2[1]-s2[0]*s0[1]) + d2[1]*(s1[0]*s0[1]-s0[0]*s1[1]))/denom;
       ctx.transform(a,b,c,d,e,f);
     }
 
@@ -228,6 +228,32 @@
         scaleMode = k;
       }
       layer.draw();
+    });
+
+    // Küche löschen
+    document.getElementById("deleteKitchenBtn").addEventListener("click", () => {
+      const sel = document.getElementById("kitchenSelect");
+      if (!sel.selectedOptions.length) {
+        alert("Bitte zuerst eine Küche auswählen.");
+        return;
+      }
+
+      const idx = parseInt(sel.selectedOptions[0].value);
+      const k = kitchens[idx];
+
+      // Entferne ImageNode und Handles
+      k.imageNode.destroy();
+      k.handles.forEach(h => h.destroy());
+
+      // Entferne aus Array
+      kitchens.splice(idx, 1);
+
+      // Transformer zurücksetzen
+      transformer.nodes([]);
+      layer.draw();
+
+      // Dropdown aktualisieren
+      updateDropdown();
     });
 
     // Eigene Küche hochladen
