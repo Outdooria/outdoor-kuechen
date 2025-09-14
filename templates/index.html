@@ -12,7 +12,7 @@
     #controls { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin: 12px 0; }
     button, select, input[type=file] { padding: 10px 14px; border-radius: 6px; border: none; color: #fff; background: #0077cc; cursor: pointer; }
     #groupBtn { background:#6f42c1; } #ungroupBtn{background:#20c997;} #deleteKitchenBtn{background:#dc3545;}
-    #scaleModeBtn{background:#ff8800;}
+    #scaleModeBtn{background:#ff8800;} #toggleGridBtn{background:#17a2b8;}
     #kitchenSelect{ background:#555; min-width: 200px; }
     #preview img{ max-width:100%; border:1px solid #ccc; border-radius:6px; margin-top:10px; }
     label { cursor: pointer; }
@@ -60,10 +60,18 @@
     let kitchens = [];
     let transformer;
     let scaleMode = null;
+    let gridLayer, gridVisible = false;
+    let currentGroup = null;
 
     function initStage(width, height) {
       document.getElementById('konva-container').innerHTML = '';
       stage = new Konva.Stage({ container: 'konva-container', width, height });
+      
+      // Grid-Layer
+      gridLayer = new Konva.Layer();
+      stage.add(gridLayer);
+
+      // Küchen-Layer
       layer = new Konva.Layer();
       stage.add(layer);
 
@@ -76,6 +84,7 @@
       layer.add(transformer);
 
       kitchens = [];
+      currentGroup = null;
       updateDropdown();
     }
 
@@ -241,19 +250,75 @@
       const idx = parseInt(sel.selectedOptions[0].value);
       const k = kitchens[idx];
 
-      // Entferne ImageNode und Handles
       k.imageNode.destroy();
       k.handles.forEach(h => h.destroy());
-
-      // Entferne aus Array
       kitchens.splice(idx, 1);
 
-      // Transformer zurücksetzen
       transformer.nodes([]);
       layer.draw();
-
-      // Dropdown aktualisieren
       updateDropdown();
+    });
+
+    // Raster ein-/ausblenden
+    function drawGrid() {
+      gridLayer.destroyChildren();
+      if (!gridVisible) return;
+      const spacing = 50;
+      const w = stage.width();
+      const h = stage.height();
+      for (let x = 0; x < w; x += spacing) {
+        gridLayer.add(new Konva.Line({ points:[x,0,x,h], stroke:'#ddd', strokeWidth:1 }));
+      }
+      for (let y = 0; y < h; y += spacing) {
+        gridLayer.add(new Konva.Line({ points:[0,y,w,y], stroke:'#ddd', strokeWidth:1 }));
+      }
+    }
+
+    document.getElementById("toggleGridBtn").addEventListener("click", () => {
+      gridVisible = !gridVisible;
+      drawGrid();
+      gridLayer.draw();
+    });
+
+    // Gruppieren
+    document.getElementById("groupBtn").addEventListener("click", () => {
+      const sel = document.getElementById("kitchenSelect");
+      const indices = Array.from(sel.selectedOptions).map(opt => parseInt(opt.value));
+      if (indices.length < 2) {
+        alert("Bitte mindestens zwei Küchen auswählen.");
+        return;
+      }
+
+      const group = new Konva.Group({ draggable: true });
+      layer.add(group);
+
+      indices.forEach(i => {
+        const k = kitchens[i];
+        k.handles.forEach(h => h.hide());
+        group.add(k.imageNode);
+      });
+
+      transformer.nodes([group]);
+      currentGroup = group;
+      layer.draw();
+    });
+
+    // Gruppe lösen
+    document.getElementById("ungroupBtn").addEventListener("click", () => {
+      if (!currentGroup) {
+        alert("Keine Gruppe ausgewählt.");
+        return;
+      }
+
+      const children = currentGroup.getChildren();
+      children.each(node => {
+        layer.add(node);
+      });
+
+      currentGroup.destroy();
+      currentGroup = null;
+      transformer.nodes([]);
+      layer.draw();
     });
 
     // Eigene Küche hochladen
