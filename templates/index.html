@@ -41,25 +41,6 @@
     </label>
   </div>
 
-  <!-- Standardgröße Slider -->
-  <div style="margin:16px 0;">
-    <label for="sizeSlider">Standardgröße neue Küche: 
-      <span id="sizeValue">800</span> px
-    </label><br>
-    <input type="range" id="sizeSlider" min="400" max="1200" step="50" value="800">
-
-    <!-- Vorschau -->
-    <div id="sizePreview" style="margin-top:8px;">
-      <div id="sizeBox" style="
-        display:inline-block; 
-        background:#ccc; 
-        border:1px solid #999; 
-        height:40px; 
-        width:800px;
-      "></div>
-    </div>
-  </div>
-
   <!-- Galerie -->
   <div class="gallery" id="gallery"></div>
 
@@ -96,13 +77,6 @@
       });
       layer.add(transformer);
     }
-
-    // Slider Event
-    document.getElementById("sizeSlider").addEventListener("input", (e) => {
-      defaultKitchenWidth = parseInt(e.target.value);
-      document.getElementById("sizeValue").textContent = defaultKitchenWidth;
-      document.getElementById("sizeBox").style.width = defaultKitchenWidth + "px";
-    });
 
     // Terrasse laden
     document.getElementById('terrasseInput').addEventListener('change', (e) => {
@@ -174,7 +148,7 @@
       drawTri(s[0],s[2],s[3], d[0],d[2],d[3]);
     }
 
-    // Küche hinzufügen (Größe abhängig vom Slider)
+    // Küche hinzufügen
     function addKitchen(url, name="Küche") {
       const img = new Image();
       img.onload = () => {
@@ -221,7 +195,7 @@
       img.src=url;
     }
 
-    // Dropdown aktualisieren
+    // Dropdown
     function updateDropdown() {
       const sel=document.getElementById('kitchenSelect'); sel.innerHTML='';
       kitchens.forEach((k,i)=>{
@@ -272,10 +246,20 @@
       gridVisible=!gridVisible; drawGrid();
     });
 
-    // Download
+    // Download (Handles & Transformer ausblenden)
     document.getElementById("downloadBtn").addEventListener("click", () => {
+      kitchens.forEach(k => k.handles.forEach(h => h.hide()));
+      transformer.hide();
+
       const dataURL=stage.toDataURL({pixelRatio:2});
-      const a=document.createElement('a'); a.href=dataURL; a.download='outdoor-kueche.png'; a.click();
+
+      kitchens.forEach(k => k.handles.forEach(h => h.show()));
+      transformer.show();
+
+      const a=document.createElement('a'); 
+      a.href=dataURL; 
+      a.download='outdoor-kueche.png'; 
+      a.click();
     });
 
     initStage(800,500);
