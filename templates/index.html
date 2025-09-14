@@ -11,9 +11,10 @@
     .card { width: 200px; border: 1px solid #ddd; border-radius: 10px; padding: 10px; background: #fff; }
     .card img { width: 100%; height: auto; border-radius: 8px; }
     #controls { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin: 12px 0; }
-    button, select, input[type=file] {
-      padding: 10px 14px; border-radius: 6px; border: none; color: #fff; background: #0077cc; cursor: pointer;
+    button, select, input[type=file], input[type=range] {
+      padding: 10px 14px; border-radius: 6px; border: none; cursor: pointer;
     }
+    button { color:#fff; background: #0077cc; }
     #toggleGridBtn{ background:#17a2b8;}
     #scaleModeBtn{background:#ff8800;}
     #deleteKitchenBtn{background:#dc3545;}
@@ -40,6 +41,14 @@
     </label>
   </div>
 
+  <!-- Standardgröße Slider -->
+  <div style="margin:16px 0;">
+    <label for="sizeSlider">Standardgröße neue Küche: 
+      <span id="sizeValue">800</span> px
+    </label><br>
+    <input type="range" id="sizeSlider" min="400" max="1200" step="50" value="800">
+  </div>
+
   <!-- Galerie -->
   <div class="gallery" id="gallery"></div>
 
@@ -61,6 +70,7 @@
     let kitchens = [];
     let gridVisible = false;
     let scaleMode = null;
+    let defaultKitchenWidth = 800; // Standardbreite
 
     function initStage(width, height) {
       document.getElementById('konva-container').innerHTML = '';
@@ -75,6 +85,12 @@
       });
       layer.add(transformer);
     }
+
+    // Slider Event
+    document.getElementById("sizeSlider").addEventListener("input", (e) => {
+      defaultKitchenWidth = parseInt(e.target.value);
+      document.getElementById("sizeValue").textContent = defaultKitchenWidth;
+    });
 
     // Terrasse laden
     document.getElementById('terrasseInput').addEventListener('change', (e) => {
@@ -131,6 +147,7 @@
       const ctx = viewCanvas.getContext('2d');
       ctx.clearRect(0,0,viewCanvas.width, viewCanvas.height);
       const w = baseCanvas.width, h = baseCanvas.height;
+
       const s = [[0,0],[w,0],[w,h],[0,h]];
       const d = dstPts;
       function drawTri(s0,s1,s2,d0,d1,d2){
@@ -146,11 +163,12 @@
       drawTri(s[0],s[2],s[3], d[0],d[2],d[3]);
     }
 
-    // Küche hinzufügen (jetzt 800px breit)
+    // Küche hinzufügen (Größe abhängig vom Slider)
     function addKitchen(url, name="Küche") {
       const img = new Image();
       img.onload = () => {
-        const targetW = 800, targetH = (img.height/img.width)*800;  // << größer gemacht
+        const targetW = defaultKitchenWidth;
+        const targetH = (img.height/img.width)*targetW;
         const baseCanvas = document.createElement('canvas');
         baseCanvas.width = targetW; baseCanvas.height = targetH;
         baseCanvas.getContext('2d').drawImage(img,0,0,targetW,targetH);
